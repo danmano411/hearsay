@@ -87,8 +87,8 @@ def cmd_listen(a):
                     print(fmt(m), flush=True)
                 after = m["id"]
                 sf.write_text(str(after))
-        except (urllib.error.URLError, OSError) as e:
-            print(f"[hub] unreachable: {e}", flush=True)
+        except Exception as e:  # URLError/HTTPError, OSError, http.client.HTTPException, bad JSON: never die
+            print(f"[hub] unreachable: {type(e).__name__}: {e}", flush=True)
             time.sleep(60)  # ponytail: fixed back-off; the Monitor stays armed, the owner sees the line
         time.sleep(a.interval)
 
