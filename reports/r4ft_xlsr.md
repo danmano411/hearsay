@@ -12,6 +12,8 @@ the two sets is analysed in [§5](#5-selection-discipline-and-the-val_testlike--
 
 ![val_testlike combined minDCF per eval](figures/r4ft_xlsr_curve.png)
 
+_Figure: `PYTHONPATH=src python scripts/plot_r4ft_curve.py`, from the run's `log.jsonl`._
+
 ## 1. Results
 
 minDCF: lower is better, 0 is perfect, and 1.0 is what a constant score gets. *official* and *brief* are the two
