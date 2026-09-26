@@ -126,10 +126,12 @@ class TrainSet(Dataset):
     def __getitem__(self, item):
         row, sid = item
         # hard rule: nothing outside split == "train" may reach the optimizer
-        assert self.split[row] == "train", f"non-train row {row} ({self.split[row]}) reached the train loader"
+        if self.split[row] != "train":  # a raise, not an assert: asserts vanish under python -O
+            raise ValueError(f"non-train row {row} ({self.split[row]}) reached the train loader")
         rng = np.random.default_rng([self.seed, int(sid)])
         x = train_clip(self.paths[row], rng, seconds=CROP_S)
-        assert len(x) == N_SAMP, len(x)
+        if len(x) != N_SAMP:
+            raise ValueError(f"train crop has {len(x)} samples, expected {N_SAMP}")
         return torch.from_numpy(np.ascontiguousarray(x, dtype=np.float32)), torch.tensor(self.y[row])
 
 
