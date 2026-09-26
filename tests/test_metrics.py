@@ -1,4 +1,5 @@
 """hearsay.metrics must equal the organizers' evaluation.py (third_party/asvspoof5/evaluation-package)."""
+import importlib.util
 import re
 import subprocess
 import sys
@@ -9,12 +10,11 @@ import numpy as np
 import pandas as pd
 import pytest
 
+from hearsay.audio import ROOT
 from hearsay.metrics import INTERPRETATIONS, act_dcf, all_metrics, cllr, eer, min_dcf
 
-EVAL_DIR = Path(__file__).resolve().parents[1] / "third_party/asvspoof5/evaluation-package"
-if not EVAL_DIR.exists():  # worktrees don't carry third_party; fall back to the main checkout
-    EVAL_DIR = Path("C:/Users/danma/Documents/Dan/Projects/Hearsay/third_party/asvspoof5/evaluation-package")
-pytestmark = pytest.mark.skipif(not EVAL_DIR.exists(), reason="organizers' scorer not found")
+EVAL_DIR = ROOT / "third_party/asvspoof5/evaluation-package"  # third_party is untracked; lives in the main checkout
+needs_scorer = pytest.mark.skipif(not EVAL_DIR.exists(), reason="organizers' scorer not found")
 TOL = 1e-6
 
 
@@ -56,6 +56,7 @@ def check(ours_fake_scores, labels, bona_scores_written, tmp_path, higher_is_fak
     assert abs(min_dcf(ours_fake_scores, labels, "brief_as_written", **kw) - ref_brief) < TOL
 
 
+@needs_scorer
 def test_bundled_files(tmp_path):
     for f in ("test_cm_file", "test_cm_file2"):
         s = pd.read_csv(EVAL_DIR / f, sep="\t").set_index("filename")
@@ -65,6 +66,7 @@ def test_bundled_files(tmp_path):
               higher_is_fake=False)
 
 
+@needs_scorer
 @pytest.mark.parametrize("case", ["gauss_70_30", "heavy_ties", "uniform_small", "separable"])
 def test_random_sets(tmp_path, case):
     rng = np.random.default_rng(sum(map(ord, case)))
@@ -80,7 +82,7 @@ def test_random_sets(tmp_path, case):
     else:
         s = np.where(is_fake, 0.6, 0.1) + 0.3 * rng.random(n)
     labels = np.where(is_fake, "spoof", "bonafide")
-    check(s, labels, 1.0 - s, tmp_path)
+    check(s, labels, 1.0 - s, tmp_path)  # official_as_written = organizers score 1 - s
 
 
 def test_monotone_invariance_and_trivial():
@@ -102,3 +104,24 @@ def test_fast_100k():
     t0 = time.perf_counter()
     all_metrics(rng.random(100_000), y)
     assert time.perf_counter() - t0 < 2.0
+
+
+def test_submission_validator(tmp_path):
+    spec = importlib.util.spec_from_file_location("score", Path(__file__).resolve().parents[1] / "scripts/score.py")
+    score = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(score)
+    tmpl, sub = tmp_path / "t.tsv", tmp_path / "s.tsv"
+    tmpl.write_bytes(b"filename\tcm-score\na.wav\t0.006\nb.wav\t0.006\nc.wav\t0.006\n")
+    sub.write_bytes(b"filename\tcm-score\na.wav\t0.1\nb.wav\t0.9\nc.wav\t0.5\n")
+    assert score.validate(sub, tmpl) == ([], [])
+    errors, warnings = score.validate(tmpl, tmpl)
+    assert errors == [] and len(warnings) == 2  # untouched defaults + constant file
+    for bad in (b"filename,cm-score\na.wav\t0.1\nb.wav\t0.9\nc.wav\t0.5\n",  # header
+                b"filename\tcm-score\nb.wav\t0.1\na.wav\t0.9\nc.wav\t0.5\n",  # order
+                b"filename\tcm-score\na.wav\t0.1\nb.wav\t0.9\n",  # count
+                b"filename\tcm-score\na.wav\t0.1\nb.wav\tnan\nc.wav\t0.5\n",  # NaN
+                b"filename\tcm-score\na.wav\t0.1\nb.wav\t1.2\nc.wav\t0.5\n",  # range
+                b"filename\tcm-score\na.wav 0.1\nb.wav\t0.9\nc.wav\t0.5\n",  # not TAB
+                b"\xef\xbb\xbffilename\tcm-score\na.wav\t0.1\nb.wav\t0.9\nc.wav\t0.5\n"):  # UTF-8 BOM
+        sub.write_bytes(bad)
+        assert score.validate(sub, tmpl)[0], bad
