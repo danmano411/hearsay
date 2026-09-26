@@ -18,7 +18,7 @@ _Updated by the cpu node (coordinator) on every task completion. Last update: 20
 | 2 | R1_lgbm_all_full (classic + biology features) | 0.253 | 0.228 | |
 | 3 | R3 AASIST zero-shot | 0.823 | 0.831 | |
 
-Full write-up: [`reports/final_results.md`](../reports/final_results.md). Team name for the file: still to be set by the
+Full write-up: [`reports/final_results.md`](../reports/final_results.md); training details and the val→test gap analysis: [`reports/r4ft_xlsr.md`](../reports/r4ft_xlsr.md). Team name for the file: still to be set by the
 owner (`make_submission.py --team <name>`).
 
 ## Nodes
