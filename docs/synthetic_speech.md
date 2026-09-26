@@ -139,21 +139,27 @@ one.
 | Post-processing | Exact digital silence at edges, peak-normalized level, MP3 frame traces | Product pipeline | Trim silence and normalize level before modeling (to remove shortcuts), then codec-augment both classes | DiffSSD ElevenLabs/PlayHT are MP3 |
 
 Shortcut warning (not a spoof artifact, a dataset artifact): leading/trailing silence length and level differ by
-source in ASVspoof-style datasets and models learn them [24]. Phase 1 handles trimming; our sim clips are
-RMS-matched (copy-synthesis) but not trimmed, so they must go through the same Phase-1 cleaning path.
+source in ASVspoof-style datasets and models learn them [24]. Our sim clips are level-matched (copy-synthesis to its
+source clip, TTS to the median real-LJ RMS) but not trimmed; every clip, real or fake, goes through
+`hearsay.preprocess.prep()` (DC removal, trim, 7 kHz low-pass, RMS normalization) before any model sees it.
 
 ## 6. Our simulator
 
 ### What it generates
 
-`scripts/run_sim.py` (resumable, CPU, 2 processes × 2 torch threads) writes 16 kHz mono PCM16 WAVs to
-`data/processed/sim/<generator>/` and `data/processed/manifests/sim.parquet` (`audio.MANIFEST_COLUMNS`,
-`label = spoof`, `source = sim`, all clips ≥ 3 s).
+`scripts/run_sim.py` (CPU; the full set was generated as 3 parallel processes with 1 torch thread each, one per
+group of generators) writes 16 kHz mono PCM16 WAVs to `data/processed/sim/<generator>/` and
+`data/processed/manifests/sim.parquet` (`audio.MANIFEST_COLUMNS`, `label = spoof`, `source = sim`, all clips ≥ 3 s).
+It is resumable: wavs are written atomically and kept, clips that come out shorter than 3 s are logged in
+`<generator>/_skipped.txt` and not re-synthesized, and the manifest is rebuilt from the wavs on disk for *every*
+generator on each run, so a partial or `--only` run cannot leave it stale.
 
 | Generator | Kind | Model / vocoder | Native SR | Planned clips | Speakers |
 |---|---|---|---|---|---|
-| `sim_griffinlim` | copy-synthesis of real LJ | 80-bin mel → Griffin-Lim (32 it.) | 16 kHz | 242 | LJ |
-| `sim_hifigan_copysyn` | copy-synthesis of real LJ | SpeechT5 log-mel → HiFi-GAN V1 | 16 kHz | 242 | LJ |
+| `sim_griffinlim` | copy-synthesis of real LJ | 80-bin mel → Griffin-Lim (32 it.) | 16 kHz | 242 + 300 | LJ |
+| `sim_hifigan_copysyn` | copy-synthesis of real LJ | SpeechT5 log-mel → HiFi-GAN V1 | 16 kHz | 242 + 300 | LJ |
+| `sim_griffinlim_copysyn_libri` | copy-synthesis of real LibriSpeech | 80-bin mel → Griffin-Lim (32 it.) | 16 kHz | 600 | LibriSpeech speakers |
+| `sim_hifigan_copysyn_libri` | copy-synthesis of real LibriSpeech | SpeechT5 log-mel → HiFi-GAN V1 | 16 kHz | 600 | LibriSpeech speakers |
 | `sim_vits_ljs` | full TTS | VITS (LJ-trained), built-in HiFi-GAN decoder | 22.05 kHz | 1,500 | LJ (synthetic) |
 | `sim_mms_tts_eng` | full TTS | VITS (MMS English) | 16 kHz | 1,000 | 1 MMS voice |
 | `sim_speecht5` | full TTS | SpeechT5 AR transformer → HiFi-GAN | 16 kHz | 420 | 7 CMU ARCTIC x-vectors |
@@ -163,14 +169,19 @@ mms ~262/1000, vits_ljs and speecht5 smoke-test only. `run_sim.py` is resumable:
 and rewrites `sim.parquet`. Figures/stats below were produced on a 5-clip-per-generator smoke sample and must be
 regenerated with `scripts/sim_figures.py --n 60` after the full run.
 
-- **Copy-synthesis** (`src/hearsay/sim/copysyn.py`) takes each of the 242 real LJ clips, computes an 80-bin mel,
-  and re-synthesizes it. Output is length- and RMS-matched to the source clip so duration and level are not class
+- **Copy-synthesis** (`src/hearsay/sim/copysyn.py`) takes a real clip, computes an 80-bin mel, and re-synthesizes
+  it. Sources: the 242 `lj_real` clips, plus 900 real clips sampled from the `librispeech` and `ljspeech` sources
+  (per split: train 600, val 150, test_internal 150; 2/3 LibriSpeech, 1/3 LJSpeech; frozen in
+  `data/processed/sim/_copysyn_sources.parquet`). Each vocoded clip copies `text_id` and `speaker` verbatim from its
+  source row, so `make_splits` puts it in the same split as its real original, and "vocoded = fake" is no longer
+  confounded with "LJ's voice": the LibriSpeech copies are 400+ other speakers. It Output is length- and RMS-matched to the source clip so duration and level are not class
   cues. Griffin-Lim uses a 1024/256 STFT and 32 iterations; HiFi-GAN uses the SpeechT5 feature extractor's exact mel
   settings (80 bins, 80-7600 Hz, 1024/256 at 16 kHz, log10) feeding `microsoft/speecht5_hifigan`.
 - **Full TTS** (`src/hearsay/sim/tts.py`) speaks LJSpeech transcripts (NVIDIA Tacotron 2 filelists; 10,599
   sentences left after dropping digits/symbols and keeping 60-220 characters). The 220 real LJ ids with clean text
   come first, so every TTS generator has the *same sentence* as a real clip (pairs share `text_id`; group splits
   by `text_id` to avoid text leakage). VITS and SpeechT5 sample latents/dropout, so each clip is seeded by its index.
+  TTS output has no paired reference level, so it is scaled to RMS 0.063 (the median of the 242 real LJ clips).
   - `sim_vits_ljs`: `kakao-enterprise/vits-ljs`, VITS trained on LJ, i.e. **a TTS clone of our real speaker**.
     Phonemized with espeak-ng (via `phonemizer` + `espeakng-loader`), 22.05 kHz → resampled to 16 kHz.
   - `sim_mms_tts_eng`: `facebook/mms-tts-eng` [37], VITS trained on read religious text, character input, 16 kHz.
@@ -233,13 +244,15 @@ Smoke-sample values (n = 5 per group; indicative only):
 
 ## 7. Limitations and open issues
 
-- Only one real speaker (LJ) is available for copy-synthesis; when Phase 2 lands more real speakers (LibriSpeech,
-  VCTK), `copysyn.py` works on any 16 kHz wav and should be re-run on them to avoid "LJ + vocoder = fake".
+- Copy-synthesis now covers LJ and ~400 LibriSpeech speakers, but all of it is read audiobook speech; the full-TTS
+  generators still speak only LJSpeech text.
 - Only one neural vocoder (HiFi-GAN V1 via SpeechT5) is used for copy-synthesis; a BigVGAN or diffusion vocoder
   would widen coverage beyond the HiFi-GAN family that dominates DiffSSD.
 - MMS-TTS weights are CC-BY-NC 4.0; fine for this non-commercial challenge, recorded in the manifest `license`.
 - DiffSSD vocoder assignments are from the original papers/repos; the DiffSSD paper does not state them.
-- Sim clips are not silence-trimmed; they must pass through the Phase-1 cleaning path like every other source.
+- Sim clips are not silence-trimmed; `hearsay.preprocess.prep()` trims every clip at model time.
+- The copy-synthesis sample is drawn from the current `manifest.parquet` splits and frozen; the sim rows follow their
+  source's `text_id` group, so they stay in the same split as long as the split hash rule is unchanged.
 
 ## References
 

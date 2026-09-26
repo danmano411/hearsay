@@ -128,11 +128,12 @@ def level(y):
     return (y * TTS_RMS / (np.sqrt(np.mean(y**2)) + 1e-9)).astype(np.float32)
 
 
-def run(gen, n, text):
+def run(gen, n, text, reverse=False):
     d, t0, made = OUT / gen, time.time(), 0
     skip_file = d / "_skipped.txt"
     skipped = set(skip_file.read_text().split()) if skip_file.exists() else set()
-    for k, (tid, spk, out, lic, fn) in enumerate(jobs(gen, n, text)):
+    todo = list(jobs(gen, n, text))
+    for k, (tid, spk, out, lic, fn) in enumerate(todo[::-1] if reverse else todo):
         if out.exists() or out.name in skipped:
             continue
         y, sr = fn()
@@ -178,12 +179,13 @@ def main():
     ap.add_argument("--only", nargs="*", default=list(PLAN))
     ap.add_argument("--n", type=int, default=None, help="override clips per generator (smoke tests)")
     ap.add_argument("--threads", type=int, default=1)
+    ap.add_argument("--reverse", action="store_true", help="work from the end: a 2nd process on one generator")
     a = ap.parse_args()
     torch.set_num_threads(a.threads)
     text = texts()
     print(f"{len(text)} clean LJ sentences", flush=True)
     for g in a.only:
-        run(g, a.n, text)
+        run(g, a.n, text, a.reverse)
     write_manifest(text)
 
 
