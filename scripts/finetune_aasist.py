@@ -42,8 +42,9 @@ tr = m[m.split == "train"]
 # ponytail: per-class sample weighted 1/sqrt(source size) so small sources are seen; no per-generator balancing
 parts = []
 for lab, g in tr.groupby("label"):
-    w = 1 / np.sqrt(g.groupby("source").path.transform("size"))
-    parts.append(g.sample(min(a.per_class, len(g)), weights=w, random_state=0))
+    w = 1 / np.sqrt(g.groupby("source").path.transform("size").to_numpy())
+    pick = np.random.default_rng(0).choice(len(g), min(a.per_class, len(g)), replace=False, p=w / w.sum())
+    parts.append(g.iloc[pick])
 train = pd.concat(parts).sample(frac=1, random_state=1).reset_index(drop=True)
 print(train.groupby(["label", "source"]).size().to_string(), flush=True)
 
