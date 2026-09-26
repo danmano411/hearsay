@@ -2,7 +2,7 @@
 
 Two Claude Code sessions (same account) work in parallel on one repo. The **GPU node** runs everything that needs
 CUDA; the **CPU node** (16 threads, 60 GB RAM, hosts the hotspot) does everything else and coordinates.
-Status: DRAFT (2026-09-26), to be confirmed by the owner before the hub is built.
+Status: ADOPTED 2026-09-26 (owner: CPU coordinates, cross-review before merge, GitHub Issues board). Hub: `tools/hub.py` + `tools/hubctl.py`.
 
 ## 1. Nodes and roles
 
