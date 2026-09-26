@@ -34,3 +34,30 @@ Lower minDCF is better (0 = perfect, 1 = trivial). Headline = `test_internal_tes
 | R1_lgbm_nolow | val | 6274/11697 | 0.3186 | 0.2644 | 0.2915 | 8.10 | LightGBM {'num_leaves': 255, 'min_child_samples': 20} it=975, 226 feats (no 0-200 Hz contrast) |
 | R1_lgbm_nolow | val_testlike | 6274/2689 | 0.2939 | 0.2782 | 0.2860 | 8.26 | LightGBM {'num_leaves': 255, 'min_child_samples': 20} it=975, 226 feats (no 0-200 Hz contrast) |
 | R1_lgbm_nolow | test_internal_testlike | 6823/2924 | 0.3177 | 0.3284 | 0.3230 | 8.66 | LightGBM {'num_leaves': 255, 'min_child_samples': 20} it=975, 226 feats (no 0-200 Hz contrast) |
+| R0_raw_tree_full | val | 6274/12284 | 0.9296 | 0.6482 | 0.7889 | 50.35 | depth-3 tree, 9 trivial stats, raw |
+| R0_raw_tree_full | val_testlike | 6274/2689 | 0.7844 | 0.7693 | 0.7769 | 65.89 | depth-3 tree, 9 trivial stats, raw |
+| R0_raw_tree_full | test_internal_testlike | 6823/2924 | 0.8196 | 0.7446 | 0.7821 | 63.24 | depth-3 tree, 9 trivial stats, raw |
+| R0_raw_lgbm_full | val | 6274/12284 | 0.4834 | 0.3516 | 0.4175 | 11.72 | LightGBM {'num_leaves': 63, 'min_child_samples': 50}, 9 trivial stats, raw |
+| R0_raw_lgbm_full | val_testlike | 6274/2689 | 0.5089 | 0.4848 | 0.4969 | 14.65 | LightGBM {'num_leaves': 63, 'min_child_samples': 50}, 9 trivial stats, raw |
+| R0_raw_lgbm_full | test_internal_testlike | 6823/2924 | 0.5279 | 0.5571 | 0.5425 | 16.59 | LightGBM {'num_leaves': 63, 'min_child_samples': 50}, 9 trivial stats, raw |
+| R0_prep_tree_full | val | 6274/12284 | 0.9751 | 0.9780 | 0.9766 | 91.46 | depth-3 tree, 9 trivial stats, prep |
+| R0_prep_tree_full | val_testlike | 6274/2689 | 0.9399 | 0.9705 | 0.9552 | 90.93 | depth-3 tree, 9 trivial stats, prep |
+| R0_prep_tree_full | test_internal_testlike | 6823/2924 | 0.9297 | 0.9736 | 0.9516 | 85.98 | depth-3 tree, 9 trivial stats, prep |
+| R0_prep_lgbm_full | val | 6274/12284 | 0.9343 | 0.9137 | 0.9240 | 31.48 | LightGBM {'num_leaves': 63, 'min_child_samples': 50}, 9 trivial stats, prep |
+| R0_prep_lgbm_full | val_testlike | 6274/2689 | 0.9274 | 0.9392 | 0.9333 | 32.61 | LightGBM {'num_leaves': 63, 'min_child_samples': 50}, 9 trivial stats, prep |
+| R0_prep_lgbm_full | test_internal_testlike | 6823/2924 | 0.9146 | 0.9280 | 0.9213 | 34.02 | LightGBM {'num_leaves': 63, 'min_child_samples': 50}, 9 trivial stats, prep |
+| R1_lgbm_all_full | val | 6274/12284 | 0.2895 | 0.2057 | 0.2476 | 6.75 | LightGBM {'num_leaves': 255, 'min_child_samples': 20} it=1065, 228 feats |
+| R1_lgbm_all_full | val_testlike | 6274/2689 | 0.2505 | 0.2060 | 0.2283 | 6.21 | LightGBM {'num_leaves': 255, 'min_child_samples': 20} it=1065, 228 feats |
+| R1_lgbm_all_full | test_internal_testlike | 6823/2924 | 0.2624 | 0.2434 | 0.2529 | 6.57 | LightGBM {'num_leaves': 255, 'min_child_samples': 20} it=1065, 228 feats |
+| R1_lgbm_spec_full | val | 6274/12284 | 0.4118 | 0.2569 | 0.3344 | 9.47 | LightGBM {'num_leaves': 255, 'min_child_samples': 20} it=851, 180 feats |
+| R1_lgbm_spec_full | val_testlike | 6274/2689 | 0.3117 | 0.2528 | 0.2823 | 7.44 | LightGBM {'num_leaves': 255, 'min_child_samples': 20} it=851, 180 feats |
+| R1_lgbm_spec_full | test_internal_testlike | 6823/2924 | 0.2909 | 0.2790 | 0.2849 | 7.93 | LightGBM {'num_leaves': 255, 'min_child_samples': 20} it=851, 180 feats |
+| R1_lgbm_bio_full | val | 6274/12284 | 0.6730 | 0.5328 | 0.6029 | 17.74 | LightGBM {'num_leaves': 63, 'min_child_samples': 50} it=674, 48 feats |
+| R1_lgbm_bio_full | val_testlike | 6274/2689 | 0.6414 | 0.5292 | 0.5853 | 16.51 | LightGBM {'num_leaves': 63, 'min_child_samples': 50} it=674, 48 feats |
+| R1_lgbm_bio_full | test_internal_testlike | 6823/2924 | 0.6383 | 0.5608 | 0.5996 | 16.65 | LightGBM {'num_leaves': 63, 'min_child_samples': 50} it=674, 48 feats |
+| R1_lgbm_nolow_full | val | 6274/12284 | 0.3257 | 0.2210 | 0.2734 | 7.33 | LightGBM {'num_leaves': 255, 'min_child_samples': 20} it=1028, 226 feats |
+| R1_lgbm_nolow_full | val_testlike | 6274/2689 | 0.2754 | 0.2171 | 0.2462 | 6.76 | LightGBM {'num_leaves': 255, 'min_child_samples': 20} it=1028, 226 feats |
+| R1_lgbm_nolow_full | test_internal_testlike | 6823/2924 | 0.2732 | 0.2665 | 0.2699 | 7.32 | LightGBM {'num_leaves': 255, 'min_child_samples': 20} it=1028, 226 feats |
+| R1_logreg_all_full | val | 6274/12284 | 0.6492 | 0.4854 | 0.5673 | 15.84 | standardized LR C=1.0, 228 feats |
+| R1_logreg_all_full | val_testlike | 6274/2689 | 0.5608 | 0.4444 | 0.5026 | 13.94 | standardized LR C=1.0, 228 feats |
+| R1_logreg_all_full | test_internal_testlike | 6823/2924 | 0.5610 | 0.5019 | 0.5315 | 14.87 | standardized LR C=1.0, 228 feats |
