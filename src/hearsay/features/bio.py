@@ -11,7 +11,7 @@ Groups (doc section in brackets):
   vtl_*                                                                             [Resonance]
   am_*                                                                              [Neuromotor timing]
   pause_* breath_* energy_decl                                                      [Respiration]
-  hf_*                                                                              [Turbulence]
+  hf_*        4-7 kHz noise structure (not 7-8 kHz: resampler anti-alias band = shortcut)     [Turbulence]
   gd_*                                                                              [Radiation / phase]
 """
 import warnings
@@ -139,13 +139,16 @@ def _spectral_feats(X, Xn, f0_frames, speech):
         lo = P[(freqs >= 50) & (freqs < 1000)][:, speech].sum()
         hi = P[(freqs >= 1000) & (freqs < 5000)][:, speech].sum()
         out["alpha_ratio_db"] = 10 * np.log10(hi / lo)
-        # turbulence: flatness of the 4-8 kHz band (1 = white noise, ->0 = tonal/over-smoothed)
-        hb = freqs >= 4000
+        # turbulence: flatness of the 4-7 kHz band (1 = white noise, ->0 = tonal/over-smoothed).
+        # Stops at 7 kHz on purpose: above that, the resampler's anti-alias transition band (fakes resampled from
+        # 22.05/24/44.1 kHz) vs none (the given 16 kHz LJ files) dominates -> a pipeline shortcut, not turbulence.
+        hb = (freqs >= 4000) & (freqs < 7000)
+        lb = (freqs >= 50) & (freqs < 4000)
         flat = np.exp(np.log(P[hb]).mean(0)) / P[hb].mean(0)
         out["hf_flatness"] = flat[speech].mean()
         if unv.sum() >= 3:
             out["hf_flatness_unv"] = flat[unv].mean()
-        out["hf_ratio_db"] = 10 * np.log10(P[hb][:, speech].sum() / P[~hb][:, speech].sum())
+        out["hf_ratio_db"] = 10 * np.log10(P[hb][:, speech].sum() / P[lb][:, speech].sum())
         # group delay (in samples) over 100-7000 Hz, energy-gated to avoid the 1/|X|^2 blow-up near zeros
         gb = (freqs >= 100) & (freqs <= 7000)
         Xs, Xns = X[gb][:, speech], Xn[gb][:, speech]
