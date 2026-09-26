@@ -21,16 +21,24 @@ PRETRAINED = AASIST_DIR / "models" / "weights" / "AASIST" / "best.pth"
 NB_SAMP = 64600
 
 
-def _model_class():
+def module():
+    """The organizers' AASIST.py imported in place (graph layers, residual block, Model); also used by ssl_e2e."""
     spec = importlib.util.spec_from_file_location("asvspoof5_aasist", AASIST_DIR / "models" / "AASIST.py")
     mod = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(mod)
-    return mod.Model
+    return mod
+
+
+def model_config():
+    return json.loads((AASIST_DIR / "config" / "AASIST_ASVspoof5.conf").read_text())["model_config"]
+
+
+def _model_class():
+    return module().Model
 
 
 def load(weights=PRETRAINED, device="cpu"):
-    conf = json.loads((AASIST_DIR / "config" / "AASIST_ASVspoof5.conf").read_text())
-    model = _model_class()(conf["model_config"])
+    model = _model_class()(model_config())
     model.load_state_dict(torch.load(weights, map_location="cpu"))
     return model.eval().to(device)  # AASIST.py moves its sinc filter bank to x.device itself
 
