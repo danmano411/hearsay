@@ -70,9 +70,10 @@ def main():
         print(f"WARNING: skipping {missing.sum()} manifest rows whose file is missing:",
               df.loc[missing, "source"].value_counts().to_dict())
         df = df[~missing]
-    df = df.merge(load_stats(df["path"], args.workers), on="path")
+    df = df.drop(columns="duration").merge(load_stats(df["path"], args.workers), on="path")
 
-    subsets = {"all": df, "lj_voice_only": df[df.speaker == "ljspeech:LJ"]}
+    subsets = {"all": df, "given_only": df[df.source.isin(["diffssd", "lj_real"])],
+               "lj_voice_only": df[df.speaker.isin(["ljspeech:LJ", "LJ"])]}
     rows = []
     for name, sub in subsets.items():
         r = run(sub, name, STAT_COLUMNS)
