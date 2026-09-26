@@ -13,8 +13,8 @@ _Updated by the cpu node (coordinator) on every task completion. Last update: 20
 
 | rank | model | headline | val_testlike | submitted |
 |---|---|---|---|---|
-| 1 | **R4ft_xlsr_light** (XLS-R-300M fine-tuned end to end, GPU) | **0.0282** | 0.0121 | ✅ `submission/hearsay_scores.tsv` |
-| — | R5 fusion R4ft + R1 (not selected by the pre-registered rule) | 0.0218 | 0.0128 (cross-fit) | |
+| 1 | **R5_r4ft_r1** (fusion: fine-tuned XLS-R + classic features), owner amendment | 0.0218 (optimistic) | 0.0128 (cross-fit) | ✅ `submission/hearsay_scores.tsv` |
+| — | R4ft_xlsr_light alone: **unbiased headline estimate** | **0.0282** | 0.0121 | |
 | 2 | R1_lgbm_all_full (classic + biology features) | 0.253 | 0.228 | |
 | 3 | R3 AASIST zero-shot | 0.823 | 0.831 | |
 
@@ -35,6 +35,7 @@ all-defaults submission bug (#24), a listener that could die on a hub restart (#
 
 ## Log
 
+- 09:35 Owner amendment: submission switched to the R4ft + R1 fusion (ties on test-free checks, better on the HGT-like proxy); 0.0282 stays the honest estimate.
 - 08:40 Stop criterion met. R4ft headline 0.0282 confirmed with report(); pre-registered rule picks R4ft; submission built (T=8, 1,671 distinct) and validated.
 - 08:22 R4ft run 1 early-stopped (best step 6,144); scored once after config.json froze win3.
 - 07:11 R4ft run 1, 6 epochs: val_testlike 0.0166 (~2 h into its 4 h budget).

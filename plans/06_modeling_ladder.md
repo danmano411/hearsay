@@ -46,3 +46,17 @@ Stages: **A** (parallel) sim completion · R0/R1 classic ML · R3 AASIST · R4 S
 4. The chosen candidate's `test_internal_testlike` number is the headline. It is reported, never used to switch the choice.
 5. Submission = `scripts/make_submission.py --model <chosen>` (`--sigmoid` for margin outputs), validated with
    `scripts/score.py validate`. Every HGT row must be scored (no defaults).
+
+### Amendment (owner decision, 2026-09-26 ~09:30, made AFTER headline scores were seen)
+
+The pre-registered rule picked R4ft alone (val_testlike 0.0121 vs fusion cross-fit 0.0128; ties go to the simpler
+model). The owner overruled it in favour of the R4ft + R1 fusion (`R5_r4ft_r1`) on this evidence:
+- Two test-free checks tie: `val_testlike` (0.0121 vs 0.0128 cross-fit) and a fair check on 9,595 validation fakes no
+  model selected on + the validation reals (0.0329 vs 0.0327).
+- The HGT-like validation proxy (1,185 LJ reals vs 6,703 DiffSSD fakes) is saturated but favours the fusion (0.0007 vs 0.0000).
+- The headline set favours the fusion (0.0282 → 0.0218), with gains on ElevenLabs / PlayHT / UnitSpeech fakes and
+  In-the-Wild reals.
+
+Consequence: because the headline informed the choice, **0.0218 is optimistic**. The unbiased headline estimate remains
+R4ft's **0.0282**, and the fusion's true performance is best described as "at least that good". Fusion tuning tried on
+validation only (C = 0.1, 0.01; spectral+bio or bio-only instead of the joint R1 model) never beat C = 1 with R1.
