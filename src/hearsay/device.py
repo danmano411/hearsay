@@ -15,7 +15,9 @@ def resolve(name="auto"):
         # Windows (WDDM) lets an over-allocation spill into shared system memory, which runs ~100x slower instead of
         # failing (an 8 GB card at WavLM batch 64 crawled for 20+ min). Capping the caching allocator below the card
         # size turns that into a clean torch.OutOfMemoryError the caller can catch (smaller batch) or see at once.
-        torch.cuda.set_per_process_memory_fraction(CUDA_MEMORY_FRACTION, dev)
+        # needs an indexed device: torch.device("cuda") (what --device auto/cuda gives) raises ValueError
+        torch.cuda.set_per_process_memory_fraction(
+            CUDA_MEMORY_FRACTION, dev.index if dev.index is not None else torch.cuda.current_device())
     return dev
 
 
