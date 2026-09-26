@@ -29,6 +29,8 @@ DEFAULT = 0.3
 def build(scores, template=TEMPLATE, sigmoid=False, max_unscored=0, temperature=1.0):
     """scores: Series filename -> score. -> (template filenames, values, n_unscored). Raises ValueError."""
     names = [ln.split("\t")[0] for ln in Path(template).read_text().rstrip("\n").split("\n")[1:]]
+    if not temperature > 0:  # 0 divides by zero; a negative T would silently reverse the ranking
+        raise ValueError(f"--temperature must be > 0, got {temperature}")
     if scores.index.duplicated().any() or not np.isfinite(scores).all():
         raise ValueError("duplicate filenames or non-finite scores")
     extra = set(scores.index) - set(names)
