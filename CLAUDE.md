@@ -1,8 +1,19 @@
 # HEARSAY — notes for Claude
 
 HackGT 2026 NSA challenge: score 1,671 test clips 0.0 (real) → 1.0 (synthetic); graded 60% minDCF, 20% creativity,
-20% GitHub docs. **Start by reading `docs/GPU_HANDOFF.md`**: current results, what's paused, and the ordered to-do list.
-Two machines work on this repo at once: **read `plans/07_two_node_protocol.md`** for roles, channels and rules.
+20% GitHub docs. Read, in order: this file → **`plans/07_two_node_protocol.md`** (two machines, roles, hub, rules)
+→ `docs/GPU_HANDOFF.md` (results so far, how to resume paused jobs). Live task list = GitHub issues (`gh issue list`).
+
+## Two-node setup (since 2026-09-26)
+- **cpu** node (hotspot host, 192.168.137.1) = coordinator; **gpu** node = CUDA worker. Which one you are is in your
+  first prompt; if unsure, `nvidia-smi` works only on the gpu node.
+- Required env on every node (the code's default root is the CPU laptop's path):
+  `HEARSAY_ROOT=<repo path>`, `HEARSAY_HUB=http://192.168.137.1:8770`, `HEARSAY_HUB_TOKEN=<from the owner, never commit>`.
+- Talk through the hub: `python tools/hubctl.py send|inbox|listen|job|put|get|ls|status` (see its docstring). Keep a
+  Monitor on `hubctl.py listen --me <node>` and re-arm it when it expires.
+- Single writers: the **cpu** node alone writes `reports/leaderboard.md`, `data/processed/manifest.parquet`,
+  `data/scores/` (canonical) and `submission/`. The gpu node uploads scores with `hubctl put` and self-checks with
+  `hearsay.evaluate.evaluate()`, never `report()`.
 
 ## Owner decisions (don't re-ask)
 - **Test audio (`data/raw/hgt_test`) is inference only**: no fitting, normalization stats, calibration, thresholds,
@@ -24,5 +35,5 @@ Two machines work on this repo at once: **read `plans/07_two_node_protocol.md`**
 ## Conventions
 - Run with `PYTHONPATH=src`; tests `python -m pytest -q tests`. Torch scripts take `--device auto|cpu|cuda`.
 - `data/`, `third_party/`, venvs are gitignored: never commit audio, parquet, npy, or weights.
-- Write a plan in `plans/` before a new phase; branch + PR per phase; append results to `reports/leaderboard.md`;
-  write findings for judges in `reports/`/`docs/`. Commits end with a `Co-Authored-By: Claude ...` line.
+- Write a plan in `plans/` before a new phase; branch `<node>/<issue#>-<slug>` + PR; the other node reviews before
+  merge; write findings for judges in `reports/`/`docs/`. Commits end with a `Co-Authored-By: Claude ...` line.
