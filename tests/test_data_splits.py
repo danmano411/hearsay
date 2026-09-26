@@ -15,6 +15,12 @@ def _toy():
         rows.append(("bonafide", "bonafide", "ljspeech:LJ", f"diffssd:{n}"))  # real LJ reading the same sentence
         rows.append(("bonafide", "bonafide", None, None))  # external clip without metadata
     df = pd.DataFrame(rows, columns=["label", "generator", "speaker", "text_id"])
+    df["source"] = "toy"
+    lj = [("lj_real", "bonafide", "bonafide", "ljspeech:LJ", f"ljspeech:LJ001-{i:04d}") for i in range(50)]
+    lj += [("sim", "spoof", "sim_vits_ljs", "LJ", f"LJ001-{i:04d}") for i in range(50)]  # other phase's id style
+    itw = [("in_the_wild", lab, "itw", f"celeb{i % 5}", f"itw:{i}") for i, lab in enumerate(["bonafide", "spoof"] * 50)]
+    df = pd.concat([df, pd.DataFrame(lj + itw, columns=["source", "label", "generator", "speaker", "text_id"])],
+                   ignore_index=True)
     df["path"] = [f"p/{i}.wav" for i in range(len(df))]
     return df
 
@@ -27,9 +33,13 @@ def test_splits_leak_free_and_deterministic():
     st = a.dropna(subset=["text_id"])
     assert (bucket[st.index].groupby([st["speaker"], st["text_id"]]).nunique() == 1).all()
     assert (bucket[st.index].groupby(st["text_id"]).nunique() == 1).all()  # real LJ + LJ fakes of a sentence together
+    lj = a[a["text_id"].str.contains("LJ001", na=False)]
+    assert (bucket[lj.index].groupby(lj["text_id"].str[-10:]).nunique() == 1).all()  # real LJ vs sim LJ fake
+    itw = a[a.source == "in_the_wild"]
+    assert (bucket[itw.index].groupby(itw["speaker"]).nunique() == 1).all()
     assert not (a["generator"].isin(HELDOUT_GENERATORS) & (a["split"] == "train")).any()
     assert set(a["split"]) == {"train", "val", "test_internal", "excluded"}
-    assert set(a.loc[a.label == "spoof", "logo_fold"]) == {"grad_tts", "diffgan_tts", "xtts_v2"}
+    assert set(a.loc[a.label == "spoof", "logo_fold"]) == {"grad_tts", "diffgan_tts", "xtts_v2", "sim_vits_ljs", "itw"}
     assert a["logo_fold"].notna().all()
     t = a[a["val_testlike"]]
     assert (t["split"] == "val").all() and abs((t["label"] == "spoof").mean() - 0.3) < 0.05

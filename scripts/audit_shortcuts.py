@@ -65,6 +65,11 @@ def main():
     ap.add_argument("--workers", type=int, default=8)
     args = ap.parse_args()
     df = pd.read_parquet(PROCESSED / "manifest.parquet")
+    missing = ~df["path"].map(lambda p: (ROOT / p).exists())
+    if missing.any():
+        print(f"WARNING: skipping {missing.sum()} manifest rows whose file is missing:",
+              df.loc[missing, "source"].value_counts().to_dict())
+        df = df[~missing]
     df = df.merge(load_stats(df["path"], args.workers), on="path")
 
     subsets = {"all": df, "lj_voice_only": df[df.speaker == "ljspeech:LJ"]}
