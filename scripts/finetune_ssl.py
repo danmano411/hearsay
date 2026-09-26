@@ -45,7 +45,8 @@ from hearsay import device
 from hearsay.audio import DATA, ROOT
 from hearsay.evaluate import SCORES, evaluate, manifest, metrics_for, per_source
 from hearsay.models import ssl_e2e
-from hearsay.models.ssl_e2e_data import BalancedBatches, TrainSet, center_cache, eval_loader, parse_up, train_loader
+from hearsay.models.ssl_e2e_data import (DEFAULT_UP, BalancedBatches, TrainSet, center_cache, eval_loader, parse_up,
+                                        train_loader)
 
 HGT_DIR = DATA / "raw" / "hgt_test"
 TEMPLATE_NAME = "HGT_Hearsay_score_template.csv"  # scripts/score.py TEMPLATE
@@ -122,7 +123,8 @@ def parse(argv=None):
     if a.name is None:
         short = {"xlsr_300m": "xlsr"}.get(a.model, a.model.replace("/", "_"))
         a.name = f"R4ft_{short}_{a.backend}"
-    a.up = parse_up(a.up) if a.up else None
+    # resolve the default here so args.json / config.json record the weights the sampler actually applies
+    a.up = parse_up(a.up) if a.up else dict(DEFAULT_UP)
     return a
 
 
@@ -325,7 +327,7 @@ def train(a):
         sampler = BalancedBatches.from_state(tr, ck["sampler"])
     else:
         (run / "args.json").write_text(json.dumps({k: v for k, v in vars(a).items() if k != "up"} |
-                                                  {"up": [[s, lab, w] for (s, lab), w in (a.up or {}).items()]},
+                                                  {"up": [[s, lab, w] for (s, lab), w in a.up.items()]},
                                                   indent=1))
         save_last()  # step 0: the "last good checkpoint" a NaN restore can fall back to
     if state["stop"]:

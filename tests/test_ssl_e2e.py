@@ -465,6 +465,22 @@ def test_manual_windows_on_a_fresh_run_is_recorded(world):
     assert cfg["overwrite_forced"] is False
 
 
+def test_default_up_weights_are_recorded(world):
+    """Without --up the sampler applies DEFAULT_UP; args.json and config.json must record those effective weights."""
+    FT, m, root, _ = world
+    out, scores = root / "runs", root / "scores"
+    assert FT.parse(train_args(out, "up", 1)).up == {("asvspoof5", "bonafide"): 2.0}
+    FT.main(train_args(out, "up", 1))
+    want = [["asvspoof5", "bonafide", 2.0]]
+    assert json.loads((out / "up" / "args.json").read_text())["up"] == want
+    _, cfg = FT.main(score_args(out, scores, "up"))
+    assert cfg["args"]["up"] == want
+    assert json.loads((out / "up" / "config.json").read_text())["args"]["up"] == want
+    # an explicit --up is still recorded as given
+    FT.main(train_args(out, "up2", 1, "--up", "asvspoof2019_la:bonafide=1.5"))
+    assert json.loads((out / "up2" / "args.json").read_text())["up"] == [["asvspoof2019_la", "bonafide", 1.5]]
+
+
 def test_hgt_must_match_the_template(world):
     FT, m, root, _ = world
     out, scores = root / "runs", root / "scores"
