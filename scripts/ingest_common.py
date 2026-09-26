@@ -19,7 +19,7 @@ import pandas as pd
 import soundfile as sf
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "src"))
-from hearsay.audio import DATA, MANIFEST_COLUMNS, MANIFESTS, MIN_DURATION, PROCESSED, SR, load, rel, save  # noqa: E402
+from hearsay.audio import DATA, MANIFEST_COLUMNS, MANIFESTS, MIN_DURATION, PROCESSED, ROOT, SR, load, rel, save  # noqa: E402,F401
 
 EXTERNAL = DATA / "external"
 WORKERS = 4  # shared 16-thread box, 5 agents
@@ -85,7 +85,8 @@ def write_manifest(rows, source):
 
 
 def out_path(source, *parts):
-    return PROCESSED.joinpath(source, *parts).with_suffix(".wav")
+    """parts[-1] is a stem; appended (not with_suffix) so stems containing dots stay unique."""
+    return PROCESSED.joinpath(source, *parts[:-1], parts[-1] + ".wav")
 
 
 # ---------------------------------------------------------------- remote zip (HTTP range) access
