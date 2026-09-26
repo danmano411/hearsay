@@ -14,7 +14,33 @@ Nothing under `data/` is committed.
 
 ## 1. What we ingested
 
-RESULTS_TABLE
+| source | bonafide | spoof | hours | spoof generators | speakers | GB on disk |
+|---|---:|---:|---:|---:|---:|---:|
+| ljspeech | 11,945 | 0 | 22.9 | 0 | 1 (LJ) | 2.64 |
+| librispeech | 16,365 | 0 | 52.4 | 0 | 1,001 | 6.03 |
+| wavefake | 0 | 11,256 | 20.6 | 8 | 1 (LJ) | 2.38 |
+| in_the_wild | 6,030 | 5,179 | 19.3 | 1 (unlabelled) | 54 | 2.23 |
+| asvspoof2019_la | 4,329 | 3,460 | 9.1 | 13 | 67 | 1.05 |
+| librisevoc | 2,641 | 10,000 | 33.4 | 6 | 207 | 3.85 |
+| asvspoof5 | 2,777 | 10,773 | 26.6 | 16 | 730 | 3.07 |
+| sonar | 2,274 | 1,565 | 8.0 | 8 | n/a | 0.92 |
+| dfadd | 458 | 2,373 | 3.5 | 5 | n/a | 0.41 |
+| mlaad_tiny | 5,714 | 5,796 | 24.4 | 64 | n/a | 2.82 |
+| cvoicefake_en | 4,187 | 3,897 | 13.1 | 5 | n/a | 1.51 |
+| **total external** | **56,720** | **54,299** | **233** | **126** | | **26.9** |
+
+**Class balance.** The given data is 242 real vs 70,000 fake, so 0.3 % real. With the external data it is
+**56,962 real vs 124,299 fake (31 % real)**. The external part alone is balanced (51 % real). Phase 6 can move the
+ratio toward the test's ~70 % by subsampling DiffSSD fakes or weighting classes. It no longer has to up-weight 242 clips of one voice.
+
+Key counts behind the shortcut fix:
+- **LJ voice**: 12,187 real (11,945 new + 242 given) vs 11,256 WaveFake + 20,000 DiffSSD LJ-model fakes.
+  The LJ voice is no longer a real-only cue.
+- **DiffSSD-cloned voices**: 1,128 real LibriSpeech utterances (103–129 per speaker for all 10 speakers) vs
+  their DiffSSD clones.
+
+Disk: 26.9 GB of canonical audio. Raw leftovers are about 28 MB (protocol files, logs), because every raw shard and
+download was deleted after its ingest (logged in `data/external/logs/`). The 40 GB budget is not exceeded.
 
 Each row can be re-checked with `python scripts/ingest_summary.py`. It asserts the schema, the labels,
 ≥ 3 s durations, a filled license, unique paths that exist on disk, and zero overlap with `data/raw/lj_real`.
@@ -27,7 +53,7 @@ Each row can be re-checked with `python scripts/ingest_summary.py`. It asserts t
 | Same voice, fake | `wavefake` (7 vocoders + 1 TTS, all in the LJ voice, same LJ sentence ids) | Matched pairs: identical speaker, text and recording chain, differing only in the synthesis. This directly removes "LJ timbre ⇒ real". |
 | Cloned voices, real | `librispeech`: **all** utterances of the 10 speakers DiffSSD clones (100, 1487, 2061, 3654, 4490, 5448, 6167, 6575, 7995, 8848) | The real side of DiffSSD's voice-cloning generators (XTTS v2, YourTTS, OpenVoice v2, UnitSpeech, PlayHT, ElevenLabs). Without it those 10 voices are *only ever fake*. |
 | Real speaker/channel diversity | `librispeech` (dev/test-clean + 12 utts from each train-clean-360 speaker), `in_the_wild` (celebrity speech from the web), `asvspoof2019_la` (VCTK speakers), `asvspoof5` (MLS, crowdsourced, with codecs), `cvoicefake_en` (Common Voice, consumer mics), `sonar` (LibriTTS), `mlaad_tiny` (M-AILABS audiobooks), `librisevoc` (LibriTTS), `dfadd` (VCTK) | Test reals probably are not all LJ. Many voices, microphones and codecs on the real side force the model to learn artifacts, not identity. |
-| New generator families | ASVspoof 2019 A07–A19, ASVspoof 5 A17–A32, SONAR (OpenAI TTS, VALL-E, VoiceBox, NaturalSpeech 3, …), MLAAD-tiny (~75 English systems from 2023–25), DFADD (diffusion / flow matching), LibriSeVoc + CVoiceFake (vocoder resynthesis), In-the-Wild (unknown in-the-wild fakes) | Unseen-generator robustness. Leave-one-generator-out validation (Phase 1/6) needs many generators to hold out. |
+| New generator families | ASVspoof 2019 A07–A19, ASVspoof 5 A17–A32, SONAR (OpenAI TTS, VALL-E, VoiceBox, NaturalSpeech 3, …), MLAAD-tiny (64 English systems from 2023–25), DFADD (diffusion / flow matching), LibriSeVoc + CVoiceFake (vocoder resynthesis), In-the-Wild (unknown in-the-wild fakes) | Unseen-generator robustness. Leave-one-generator-out validation (Phase 1/6) needs many generators to hold out. |
 
 ## 2. Candidate survey
 
@@ -44,7 +70,7 @@ Sizes are for the full upstream release. "Real/fake" counts are upstream counts,
 | LibriSeVoc | [github](https://github.com/csun22/Synthetic-Voice-Detection-Vocoder-Artifacts), [HF](https://huggingface.co/datasets/SpeechAntiSpoofingBenchmarks/LibriSeVoc) | CC BY-SA 4.0 | 3.2 GB (test) | 2,641 / 15,846 | DiffWave, MelGAN, PWG, WaveGrad, WaveNet, WaveRNN | 24→16 kHz | open | **USE**: matched real/vocoded pairs |
 | SONAR | [github](https://github.com/Jessegator/SONAR), [HF](https://huggingface.co/datasets/SpeechAntiSpoofingBenchmarks/SONAR) | CC BY-NC 4.0 | 0.5 GB | 2,274 / 1,674 | OpenAI TTS, xTTS, FlashSpeech, VoiceBox, AudioGen, VALL-E, NaturalSpeech 3, PromptTTS 2 | 16 kHz | open | **USE**: newest commercial/SOTA systems |
 | DFADD | [paper](https://arxiv.org/abs/2409.08731), [HF](https://huggingface.co/datasets/SpeechAntiSpoofingBenchmarks/DFADD) | MIT | 0.5 GB (test) | VCTK / 3,000 | Grad-TTS, Matcha-TTS, NaturalSpeech 2, StyleTTS 2, P-Flow | 16 kHz | open | **USE**: diffusion/flow TTS like DiffSSD's, on other voices |
-| MLAAD-tiny | [HF](https://huggingface.co/datasets/mueller91/MLAAD-tiny) | CC BY-NC 4.0 | 3.5 GB | ~6k / ~6.4k (all langs) | ~75 English TTS systems | mixed | open | **USE (English only)** |
+| MLAAD-tiny | [HF](https://huggingface.co/datasets/mueller91/MLAAD-tiny) | CC BY-NC 4.0 | 3.5 GB | ~6k / ~6.4k (all langs) | ~78 English TTS systems (64 survive the 3 s filter) | mixed | open | **USE (English only)** |
 | CVoiceFake (small) | [paper](https://arxiv.org/abs/2409.09272), [HF](https://huggingface.co/datasets/SpeechAntiSpoofingBenchmarks/CVoiceFake_small) | CC BY 4.0 | 4.6 GB | 23,544 / 114,592 (en 4,315 / 21,438) | Griffin-Lim, WORLD, PWG, MB-MelGAN, Style-MelGAN | 16 kHz mp3 | open | **USE (English)**: gives Common Voice reals without the gate |
 | MLAAD (full) | [HF](https://huggingface.co/datasets/mueller91/MLAAD) | CC BY-NC 4.0 | 35 GB | M-AILABS / ~100k+ | 100+ TTS, 40 langs | mixed | HF click-through gate | MAYBE: owner can accept the gate; tiny covers the same systems |
 | Common Voice (EN) | [commonvoice.mozilla.org](https://commonvoice.mozilla.org/) | CC0 | ~80 GB (en) | millions / 0 | – | 48 kHz mp3 | account / gated | MAYBE: covered by CVoiceFake-en reals |
@@ -79,6 +105,11 @@ Sizes are for the full upstream release. "Real/fake" counts are upstream counts,
 - **Speaker ids** are upstream ids (LibriSpeech numeric ids like `100` match DiffSSD's `speaker_100` folders;
   LJ is `LJ`). `text_id` is the upstream utterance id. For WaveFake/LibriSeVoc it is the id of the *real* utterance
   that was resynthesised, so matched pairs can be grouped into the same split.
+- **Bug caught by the summary check**: SONAR file stems contain dots (`..._valle.0`), and the first version of
+  `out_path` used `with_suffix`, so 8 VALL-E pairs collided on one output file. `ingest_summary.py` asserts unique
+  paths and caught it. `out_path` now appends `.wav`, which has a regression test, and SONAR was re-ingested cleanly.
+- **Clips < 3 s dropped** (the test clips are > 3 s): LJSpeech 913 of 12,858. In-the-Wild kept 11,209 of 20,000 selected.
+  ASVspoof 2019 kept 7,789 of 15,355. WaveFake kept 11,256 of 12,500.
 - `sr_orig` for the HF repacks is the repack's rate (16 kHz), not necessarily the original recording rate.
 
 ## 4. Recommendations for Phases 1 and 6
