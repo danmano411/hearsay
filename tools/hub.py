@@ -20,7 +20,7 @@ from urllib.parse import parse_qs, unquote, urlparse
 ROOT = Path(os.environ.get("HEARSAY_ROOT", Path(__file__).resolve().parents[1]))
 HUB = ROOT / "data" / "hub"
 # artifacts may only be read/written under these (relative to ROOT)
-ALLOWED = ("data/scores/", "data/features/", "data/models/", "data/processed/sim/",
+ALLOWED = ("data/scores/", "data/bench/", "data/features/", "data/models/", "data/processed/sim/",
            "data/processed/manifest.parquet", "data/processed/manifests/")
 TYPES = {"ASSIGN", "CLAIM", "PROGRESS", "ARTIFACT", "DONE", "REVIEW_REQUEST", "REVIEW", "QUESTION", "ANSWER",
          "BLOCKED", "SYNC", "STOP", "NOTE"}

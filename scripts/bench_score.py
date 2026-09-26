@@ -3,7 +3,7 @@ calibrated or selected on benchmark data.
 
     python scripts/bench_score.py r1   [--sets ...]   # refits R1_lgbm_all_full exactly (once, saved), then scores
     python scripts/bench_score.py r3   [--sets ...]   # organizers' AASIST, zero-shot
-    python scripts/bench_score.py r4ft [--sets ...]   # needs data/models/r4ft_xlsr/R4ft_xlsr_light/{best.pth,args.json,config.json}
+    python scripts/bench_score.py r4ft [--sets ...]   # needs data/models/r4ft_xlsr/R4ft_xlsr_light/{best.pth,config.json}
     python scripts/bench_score.py report              # -> reports/generalization_table.md
 
 Scores -> data/bench/scores/<model>__<set>.parquet (path, score; higher = more fake). The fusion R5_r4ft_r1 is
@@ -109,19 +109,20 @@ def r3(sets):
 
 
 # -------------------------------------------------------------------------------------------------------- R4ft
-def r4ft(sets, threads):
+def r4ft(sets, threads, device="cpu"):
     import torch
     import finetune_ssl as fs
-    a = fs.parse(["score", "--device", "cpu", "--name", NAMES["r4ft"], "--workers", "4"])
+    a = fs.parse(["score", "--device", device, "--name", NAMES["r4ft"], "--workers", "4"])
     run = Path(a.out) / a.name
     cfg = json.loads((run / "config.json").read_text())
     for k in fs.ARCH:
-        setattr(a, k, json.loads((run / "args.json").read_text())[k])
+        setattr(a, k, cfg["arch"][k])  # config.json froze the architecture with the checkpoint
     if fs.sha256(run / "best.pth") != cfg["sha256"]:
         raise SystemExit("best.pth does not match the frozen config.json sha256")
     torch.set_num_threads(threads)
-    dev = torch.device("cpu")
-    model = fs.make_model(a, grad_ckpt=False)
+    from hearsay import device as hdev
+    dev = hdev.resolve(device)
+    model = fs.make_model(a, grad_ckpt=False).to(dev)
     model.load_state_dict(torch.load(run / "best.pth", map_location="cpu"))
     model.eval()
     for name in sets:
@@ -139,7 +140,7 @@ def fused(frames):
     X = pd.concat([frames[m].rename(m) for m in cfg["models"]], axis=1, join="inner")
     z = sum(cfg["weights"][m] * (apply_transform(X[m], cfg["transforms"][m]) - cfg["mu"][m]) / cfg["sd"][m]
             for m in cfg["models"])
-    return z + cfg["intercept"]
+    return pd.Series(np.asarray(z) + cfg["intercept"], index=X.index)
 
 
 def threshold(s, y, w_real=4.0, w_fake=1.0):
@@ -193,9 +194,10 @@ def main():
     ap.add_argument("--sets", nargs="+", default=None)
     ap.add_argument("--workers", type=int, default=8)
     ap.add_argument("--threads", type=int, default=12)
+    ap.add_argument("--device", default="cpu", help="r4ft: cpu | cuda | auto")
     a = ap.parse_args()
     sets = a.sets or [s for s in SETS if (BENCH / f"{s}.parquet").exists()]
-    {"r1": lambda: r1(sets, a.workers), "r3": lambda: r3(sets), "r4ft": lambda: r4ft(sets, a.threads),
+    {"r1": lambda: r1(sets, a.workers), "r3": lambda: r3(sets), "r4ft": lambda: r4ft(sets, a.threads, a.device),
      "report": lambda: report(sets)}[a.what]()
 
 
