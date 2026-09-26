@@ -52,6 +52,12 @@ def test_messages_files_and_guards(hub):
     ctl(env, "get", "data/scores/x.parquet", str(root / "back.bin"))
     assert (root / "back.bin").read_bytes() == src.read_bytes()
     assert "data/scores/x.parquet" in ctl(env, "ls", "data/scores")
+    # a second machine: its own root, token via env -> pull fetches only what it lacks
+    other = root / "other"
+    env2 = {**env, "HEARSAY_ROOT": str(other), "HEARSAY_HUB_TOKEN": (root / "data/hub/token").read_text().strip()}
+    assert "1 of 1 files to fetch" in ctl(env2, "pull", "data/scores")
+    assert (other / "data/scores/x.parquet").read_bytes() == src.read_bytes()
+    assert "0 of 1 files to fetch" in ctl(env2, "pull", "data/scores")
 
     r = subprocess.run([sys.executable, str(TOOLS / "hubctl.py"), "put", str(src), "src/evil.py"], env=env,
                        capture_output=True, text=True)

@@ -7,6 +7,7 @@ HEARSAY_HUB_TOKEN (or the file data/hub/token).
     python tools/hubctl.py put data/scores/R4_xlsr_mlp.parquet
     python tools/hubctl.py get data/scores/R4_xlsr_mlp.parquet
     python tools/hubctl.py ls data/scores
+    python tools/hubctl.py pull data/processed/sim          # fetch files missing locally (size-checked)
     python tools/hubctl.py status | inbox --me gpu [--all]
 """
 import argparse
@@ -131,6 +132,15 @@ def cmd_get(a):
     print(f"got {dst} ({dst.stat().st_size} bytes, sha256 ok)")
 
 
+def cmd_pull(a):
+    """Download every file under a hub dir that is missing locally or has a different size."""
+    items = jcall("GET", f"/files/{a.dir.rstrip('/')}/?list")
+    todo = [it for it in items if not (ROOT / it["path"]).exists() or (ROOT / it["path"]).stat().st_size != it["bytes"]]
+    print(f"{len(todo)} of {len(items)} files to fetch", flush=True)
+    for it in todo:
+        cmd_get(argparse.Namespace(remote=it["path"], local=None))
+
+
 def cmd_ls(a):
     for it in jcall("GET", f"/files/{a.dir.rstrip('/')}/?list"):
         print(f"{it['bytes']:>14,}  {it['path']}")
@@ -151,6 +161,7 @@ def main():
     s = sp.add_parser("put"); s.add_argument("local"); s.add_argument("remote", nargs="?")
     s = sp.add_parser("get"); s.add_argument("remote"); s.add_argument("local", nargs="?")
     s = sp.add_parser("ls"); s.add_argument("dir")
+    s = sp.add_parser("pull"); s.add_argument("dir")
     sp.add_parser("status")
     a = ap.parse_args()
     globals()[f"cmd_{a.cmd}"](a)
