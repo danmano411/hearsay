@@ -1,5 +1,10 @@
 # GPU handoff — where things stand (paused 2026-09-26, 01:45 EDT)
 
+> **Update 2026-09-26 03:30:** work now runs on two machines at once (`plans/07_two_node_protocol.md`). The data was
+> streamed to the GPU laptop over the hotspot (no rebuild needed). The ordered "Remaining work" list below is now tracked
+> as GitHub issues #10–#21 (`gpu` tasks G0–G6, `cpu` tasks C2–C6). Use this file for results so far and for the exact
+> commands to resume the paused jobs.
+
 Work ran CPU-only on a laptop (Ryzen 7840U, no CUDA) and was paused at a clean point so it can move to a GPU machine.
 All code, docs and results are on `main`. **Data, features, scores and weights are not in git** (see "Data" below).
 
