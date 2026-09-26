@@ -34,3 +34,15 @@ Data: 180,726 clips (56,962 real / 123,764 fake) across 14 sources, 126+ generat
 
 Stages: **A** (parallel) sim completion · R0/R1 classic ML · R3 AASIST · R4 SSL embeddings + heads →
 **B** R2 CNN + best-rung improvements → **C** R5 fusion, default-value strategy, submission, docs.
+
+## Final-submission rule (pre-registered 2026-09-26 06:15, before any R4ft headline score existed)
+
+1. Candidates: every rung with scores on all `val_testlike` + `test_internal_testlike` rows **and** all 1,671 HGT clips,
+   plus LR fusions (`scripts/fuse.py`) of R4ft with R1 and/or R3.
+2. **Selection metric: `val_testlike` combined minDCF.** Fusions are compared with their *group-cross-fitted*
+   `val_testlike` number (in-sample fusion scores would be optimistic).
+3. A fusion replaces the best single model only if it beats it on `val_testlike` by ≥ 0.002 (the same margin
+   G5 uses for a new best); otherwise the simpler model wins.
+4. The chosen candidate's `test_internal_testlike` number is the headline. It is reported, never used to switch the choice.
+5. Submission = `scripts/make_submission.py --model <chosen>` (`--sigmoid` for margin outputs), validated with
+   `scripts/score.py validate`. Every HGT row must be scored (no defaults).
