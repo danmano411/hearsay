@@ -14,7 +14,8 @@ or from the organizers' feedback, so the choice below uses only our own data.
   vocoders, m4a/ogg codecs), **CD-ADD** (zero-shot TTS 2023-24, TED reals), **DECRO-en** (commercial TTS).
   They enter the manifest as ordinary sources (`manifests/bench_*.parquet`), and `make_splits.py` puts about 80 %
   of each in train. The frozen eval subsets don't change (the script refuses otherwise).
-- **Held out for selection:** **DeepVoice** (voice conversion, the documented weak spot) is never trained on. The
+- **Held out as a guardrail:** **DeepVoice** (voice conversion, fully unseen corpus) is never trained on. It
+  checks non-inferiority on unfamiliar audio; improving it is not a goal (see Rule). The
   `keyguard_*` sets are **never** used: they are derived from `test_internal` audio.
 - **Model:** the exact R4ft recipe (config.json args of `R4ft_xlsr_light`), **seed 1**, name `R6_xlsr_light`, same
   4 h budget and early stopping on `val_testlike`, window choice on `val_testlike`. GPU node.
@@ -27,14 +28,35 @@ or from the organizers' feedback, so the choice below uses only our own data.
 | E | R4ft + R6 ensemble | **fixed equal weights** on margins standardized by their `val_testlike` mean/std; no fitting |
 | E5 | E + R1 | `scripts/fuse.py` LR fusion, group cross-fitted on `val_testlike` (as R5 was) |
 
-## Rule (pre-registered)
-- **Metric:** the organizers' official minDCF (Pspoof 0.3, Cmiss 1, Cfa 4, ASVspoof direction).
-- **Selection score** = mean of the official minDCF on **`val_testlike`** and on **DeepVoice** (unseen corpus and
-  generator family). Fusion candidates use their cross-fitted `val_testlike` scores.
-- **Switch** the final submission from R5 to the best candidate only if its selection score is **≥ 10 % lower** than
-  R5's. Otherwise the final stays R5. Either way it is written with `make_submission.py --higher-is-real`.
-- `test_internal_testlike` and the other benchmark sets are scored **once, after** the choice, report-only.
-- No HGT feedback is used at any step. The HGT audio is scored only by the chosen model.
+## Rule (pre-registered; revised 2026-09-26 ~16:10, before any R6 training)
+**Goal: the lowest official minDCF on the HGT test.** Nothing else (not DeepVoice, not our headline) is a goal.
+
+**Why the final is never R5 again.** The organizers keep the best of the initial and final submission, and R5's
+flipped file (0.0584) is already scored. Resubmitting R5 adds nothing. The final should therefore be the candidate
+most likely to *beat* 0.0584. A worse final costs nothing, because 0.0584 still counts.
+
+**Why selection can't just be "lowest validation score".** `val_testlike` is in-domain and nearly saturated
+(R5 0.0088 official), while the HGT gap (0.014 held-out → 0.058 official) says the test is out-of-domain for us.
+Validation cannot see out-of-domain gains. The candidates are therefore ranked by a **prior fixed now**: more
+training diversity and more independently trained models generalize better to unseen data (the most consistent
+result in anti-spoofing and ensembling). Validation and DeepVoice act as **guardrails** that catch a broken or
+degraded run; they don't drive the choice.
+
+1. **Metric everywhere:** the organizers' official minDCF (Pspoof 0.3, Cmiss 1, Cfa 4, ASVspoof direction).
+2. **Guardrails** (a candidate must pass both; the baseline is R5, with fusions on cross-fitted `val_testlike`
+   scores):
+   - `val_testlike`: at most **R5 + 0.003** (a noise allowance on a set where R5 sits at 0.0088; catches a worse
+     model);
+   - DeepVoice (unseen corpus, never trained on): at most **R5 + 0.02**. This is a non-inferiority check on
+     unfamiliar audio, not a target.
+3. **Preference order among the candidates that pass: E5 > E > R6.** E5 = R4ft + R6 + R1 (three models, two
+   independent fine-tunes, most diversity); E = R4ft + R6 at fixed equal weights; R6 alone last. One exception,
+   fixed now: if E5's cross-fitted `val_testlike` is worse than E's by more than 0.002 (the old fusion rule), take
+   E over E5.
+4. **If no candidate passes:** the final is R5 (already counted, harmless) and the failure is reported.
+5. The final is written with `make_submission.py --higher-is-real`. `test_internal_testlike` and the remaining
+   benchmark sets are scored once, after the choice, report-only. No HGT feedback or HGT score distribution is used at
+   any step; the HGT audio is only ever scored by the models.
 
 ## Division of work
 - **cpu:** ingest DF batch B; write the bench manifests + `make_splits.py`; publish the manifest on the hub; after
