@@ -5,6 +5,7 @@ Score each test clip from 0.0 (confident real) to 1.0 (confident synthetic), opt
 - **Plans:** [`plans/`](plans/00_master_plan.md) — written before each phase.
 - **Docs:** [`docs/`](docs/) — data audit, external data, how synthetic speech is made, biology of real speech, scoring.
 - **Results:** [`reports/leaderboard.md`](reports/leaderboard.md)
+- **Status / GPU handoff:** [`docs/GPU_HANDOFF.md`](docs/GPU_HANDOFF.md) — what is done, what is paused, how to resume.
 
 ## Layout
 ```
