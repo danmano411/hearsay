@@ -1,6 +1,6 @@
 # HEARSAY — live status
 
-_Updated by the cpu node (coordinator) on every task completion. Last update: 2026-09-26 06:00 EDT._
+_Updated by the cpu node (coordinator) on every task completion. Last update: 2026-09-26 06:15 EDT._
 
 ## ⚠ Needs the owner (on the GPU laptop)
 
@@ -18,10 +18,10 @@ Headline = combined minDCF on `test_internal_testlike` (9,747 clips, 70/30, froz
 | 1 | R1_lgbm_all_full (LightGBM, 228 spectral + bio feats, full train set) | **0.253** | 0.228 | ✅ |
 | 2 | R1_lgbm_all (same, 30k-fake subset) | 0.305 | 0.282 | ✅ |
 
-In progress (validation only, headline pending): **R4ft run 1** (XLS-R-300M fine-tuned, K12) after 1 virtual epoch:
-`val_testlike` **0.0647** (EER 1.6 %; R1: 0.228). Slices (combined): playht 0.047 (R1 0.302), unit_speech 0.061
-(0.220), asvspoof2019_la reals 0.053 (0.278), asvspoof5 reals 0.281 (0.501). Still training; the headline is scored once
-the checkpoint and inference mode are frozen.
+In progress (validation only, headline pending): **R4ft run 1** (XLS-R-300M fine-tuned, K12) after 2 virtual epochs:
+`val_testlike` **0.0414** (EER 1.15 %; R1: 0.228), already below the 0.05 target *on validation*. Slices (combined):
+playht 0.027 (R1 0.302), unit_speech 0.037 (0.220), asvspoof2019_la reals 0.023 (0.278), asvspoof5 reals 0.221 (0.501).
+The stopping criterion is judged on the headline, scored once after early stopping and a frozen config.json.
 
 Target (stopping criterion): ≤ 0.05, or 3 consecutive rungs improving < 0.005.
 
@@ -39,6 +39,8 @@ all-defaults submission bug (#24), a listener that could die on a hub restart (#
 
 ## Log
 
+- 06:12 R4ft run 1, 2 epochs: val_testlike 0.0414.
+- 06:10 AASIST zero-shot: 0.823 headline (doesn't transfer); R1+AASIST fusion 0.247.
 - 05:58 R4ft run 1, 1 epoch of front-end fine-tuning: val_testlike 0.0647 (3.5× better than R1).
 - 05:47 R4ft run 1 step 300 (frozen XLS-R + trained back end): val_testlike 0.193, already below R1 (0.228).
 - 05:45 VRAM probe: XLS-R-300M K12 fits in 8 GB at 4.9 GiB allocated, 35 clips/s. Run 1 started.
