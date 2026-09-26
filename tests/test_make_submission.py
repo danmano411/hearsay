@@ -40,3 +40,7 @@ def test_unscored_rows_and_sigmoid(template):
         build(logits, template, max_unscored=3)
     _, vals, _ = build(logits, template, sigmoid=True, max_unscored=3)
     assert vals[0] > 0.5 > vals[1]
+    big = pd.Series([40.0, 45.0], index=["HGT0.wav", "HGT1.wav"])  # saturates to 1.0 at T=1 -> a tie
+    _, v1, _ = build(big, template, sigmoid=True, max_unscored=3)
+    _, v8, _ = build(big, template, sigmoid=True, max_unscored=3, temperature=8)
+    assert float(f"{v1[0]:.10g}") == float(f"{v1[1]:.10g}") and float(f"{v8[0]:.10g}") < float(f"{v8[1]:.10g}")
