@@ -5,7 +5,7 @@ Manifest resolution: --manifest PATH > data/processed/manifest.parquet > data/pr
 
 Resumable: paths already in the output parquet are skipped; output is rewritten every --chunk clips.
 
-  python scripts/extract_bio.py --sample 3000 --raw     # stratified validation sample (phase 4)
+  python scripts/extract_bio.py --sample 3000 --out data/features/bio_sample.parquet   # phase-4 validation sample
   python scripts/extract_bio.py --workers 12            # full corpus, later
 """
 import argparse
@@ -13,14 +13,13 @@ import multiprocessing as mp
 import time
 from pathlib import Path
 
-import numpy as np
 import pandas as pd
 
 from hearsay.audio import DATA, MANIFESTS, PROCESSED, ROOT, load
 from hearsay.features.bio import FEATURES, extract_bio
 
 OUT = DATA / "features" / "bio.parquet"
-KEEP = ["path", "label", "source", "generator", "speaker"]
+KEEP = ["path", "label", "source", "generator", "speaker", "sr_orig", "codec_orig"]
 LJ_VOICE = {"diffgan_tts", "grad_tts", "pro_diff", "wavegrad2"}  # DiffSSD generators trained on LJSpeech
 
 
@@ -49,16 +48,22 @@ def resolve_manifest(args):
     raise SystemExit("no manifest found; pass --manifest or --raw")
 
 
+def even(df, key, budget, seed):
+    """Sample `budget` rows split as evenly as possible over groups of `key`; small groups donate leftovers."""
+    sizes = df.groupby(key).size().sort_values()
+    parts, left = [], budget
+    for k, (g, s) in enumerate(sizes.items()):
+        t = min(s, left // (len(sizes) - k))
+        parts.append(df[df[key] == g].sample(t, random_state=seed))
+        left -= t
+    return pd.concat(parts)
+
+
 def stratified(df, n, seed):
-    """All bonafide (capped at n/2), rest of the budget split evenly over spoof generators."""
-    rng = np.random.default_rng(seed)
-    real = df[df.label == "bonafide"]
-    real = real.sample(min(len(real), n // 2), random_state=seed)
-    fake = df[df.label == "spoof"]
-    gens = sorted(fake.generator.unique())
-    per = (n - len(real)) // max(1, len(gens))
-    picks = [g.sample(min(len(g), per), random_state=int(rng.integers(1 << 31))) for _, g in fake.groupby("generator")]
-    return pd.concat([real, *picks], ignore_index=True)
+    """n/3 bonafide spread evenly over sources (speakers/channels), 2n/3 spoof spread evenly over generators."""
+    real = even(df[df.label == "bonafide"], "source", n // 3, seed)
+    fake = even(df[df.label == "spoof"], "generator", n - len(real), seed)
+    return pd.concat([real, fake], ignore_index=True)
 
 
 def work(row):
@@ -67,7 +72,7 @@ def work(row):
         y, _ = load(ROOT / row["path"])
         f = extract_bio(y)
         err = ""
-    except Exception as e:  # unreadable file: keep a NaN row so resume does not retry it forever
+    except Exception as e:  # unreadable/missing file: NaN row with the error; retried on the next run
         f, err = dict.fromkeys(FEATURES, float("nan")), repr(e)[:200]
     return {**{k: row.get(k) for k in KEEP}, **f, "bio_error": err, "bio_sec": time.time() - t0}
 
@@ -87,8 +92,10 @@ def main():
     assert not df.path.str.contains("hgt_test").any(), "test audio is inference-only"
     if args.sample:
         df = stratified(df, args.sample, args.seed)
-    out = Path(args.out)
+    out = ROOT / args.out  # relative paths are taken from the project root; absolute ones pass through
     done = pd.read_parquet(out) if out.exists() else pd.DataFrame()
+    if len(done):
+        done = done[done.bio_error == ""]  # retry failures (e.g. files another ingest had not written yet)
     todo = df[~df.path.isin(done.path)] if len(done) else df
     print(f"{len(df)} clips in manifest, {len(done)} already done, {len(todo)} to go -> {out}")
     out.parent.mkdir(parents=True, exist_ok=True)
