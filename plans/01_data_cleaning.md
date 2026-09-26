@@ -8,8 +8,8 @@
 ## Steps
 1. **Audit** every file: decodable?, sample rate, channels, bit depth, duration, peak, RMS, % clipped samples,
    leading/trailing silence length (|x| < 1e-4), DC offset, effective bandwidth (95% spectral rolloff).
-   Write `reports/data_audit.md` with per-source tables. Do the same *descriptive* audit on `hgt_test`
-   (describe only; nothing from it feeds training — it tells us what the test domain looks like).
+   Write `reports/data_audit.md` with per-source tables. For `hgt_test` run a *format* check
+   (format checks only: sample rate, channels, duration range — no level/spectral stats, per the inference-only rule).
 2. **Clean**: drop undecodable/empty files and exact duplicates (hash of PCM); mono-mix; resample to 16 kHz
    (`soxr`-quality via librosa/torchaudio); write PCM16 WAV to `data/processed/<source>/<generator>/...`.
    Do **not** trim or loudness-normalize at storage time (keeps cues auditable; normalization happens at model input).
