@@ -9,6 +9,7 @@ in template order ('filename<TAB>cm-score', LF, no BOM), and runs scripts/score.
 - Probability models write their scores as-is. Margin/logit models need --sigmoid, a fixed monotone map
   (minDCF unchanged). The choice is per model type, never decided from HGT scores.
 - Scores are written with 10 significant digits so rounding doesn't create ties (ties never break in our favour).
+  For large logits pass --temperature T (sigmoid(x / T)) so the sigmoid itself doesn't saturate into ties.
 """
 import argparse
 import sys
@@ -25,16 +26,18 @@ from hearsay.audio import DATA, ROOT  # noqa: E402
 DEFAULT = 0.3
 
 
-def build(scores, template=TEMPLATE, sigmoid=False, max_unscored=0):
+def build(scores, template=TEMPLATE, sigmoid=False, max_unscored=0, temperature=1.0):
     """scores: Series filename -> score. -> (template filenames, values, n_unscored). Raises ValueError."""
     names = [ln.split("\t")[0] for ln in Path(template).read_text().rstrip("\n").split("\n")[1:]]
+    if not temperature > 0:  # 0 divides by zero; a negative T would silently reverse the ranking
+        raise ValueError(f"--temperature must be > 0, got {temperature}")
     if scores.index.duplicated().any() or not np.isfinite(scores).all():
         raise ValueError("duplicate filenames or non-finite scores")
     extra = set(scores.index) - set(names)
     if extra:
         raise ValueError(f"{len(extra)} score filenames are not in the template, e.g. {sorted(extra)[:3]}")
     if sigmoid:
-        scores = 1 / (1 + np.exp(-scores))
+        scores = 1 / (1 + np.exp(-scores / temperature))
     elif scores.min() < 0 or scores.max() > 1:
         raise ValueError("scores outside [0, 1]: this is a margin/logit model, pass --sigmoid")
     vals = scores.reindex(names)
@@ -51,13 +54,16 @@ def main():
     ap.add_argument("--out", default=None)
     ap.add_argument("--sigmoid", action="store_true", help="model outputs margins/logits, not probabilities")
     ap.add_argument("--max-unscored", type=int, default=0)
+    ap.add_argument("--temperature", type=float, default=1.0,
+                    help="with --sigmoid: sigmoid(x / T). Large logits saturate to exactly 0/1 at 10 digits and tie; size T "
+                         "from the model's VALIDATION logit range (never from HGT scores). Rank-preserving, minDCF-neutral.")
     a = ap.parse_args()
     if not (a.team or a.out):
         ap.error("give --team or --out")
 
     s = pd.read_parquet(DATA / "scores" / f"{a.model}__hgt.parquet").set_index("filename").score
     try:
-        names, vals, n_unscored = build(s, sigmoid=a.sigmoid, max_unscored=a.max_unscored)
+        names, vals, n_unscored = build(s, sigmoid=a.sigmoid, max_unscored=a.max_unscored, temperature=a.temperature)
     except ValueError as e:
         sys.exit(f"ERROR {e}")
     if n_unscored and a.sigmoid:
