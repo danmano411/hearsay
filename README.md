@@ -99,7 +99,7 @@ python scripts/clean_given.py                     # DiffSSD + LJ -> 16 kHz canon
 python scripts/ingest_ljspeech.py                 # and ingest_librispeech.py, ingest_wavefake.py, ingest_hf_sasb.py,
                                                   #     ingest_mlaad_tiny.py (docs/external_data.md, section 5)
 python scripts/run_sim.py                         # own TTS sim
-python scripts/make_splits.py                     # needs data/processed/eval_subsets_frozen.parquet (docs/dataset.md)
+python scripts/make_splits.py                     # reads the committed splits/eval_subsets_frozen.csv
 ```
 The current best (R1) and its submission:
 ```
