@@ -28,11 +28,12 @@ def tiny(backend="light", K=3, freeze=0, ckpt=True, mask=0.05, name="tiny", seed
 
 # --- model ---------------------------------------------------------------------------------------------------------
 
-@pytest.mark.parametrize("name", ["tiny", "tiny_wavlm"])
+@pytest.mark.parametrize("name", ["tiny", "tiny_wavlm", "tiny_postln", "tiny_wavlm_postln"])
 def test_truncation_equals_full_model_blocks(name):
     from transformers import AutoModel
     torch.manual_seed(0)
-    full = AutoModel.from_config(S.tiny_config(S.TINY[name]), attn_implementation="eager").eval()
+    kind, pre_ln = S.TINY[name]
+    full = AutoModel.from_config(S.tiny_config(kind, pre_ln=pre_ln), attn_implementation="eager").eval()
     fe = S.SSLFrontEnd(name, max_blocks=3, grad_ckpt=False, mask_time_prob=0.0, attn="eager")
     fe.ssl.load_state_dict(full.state_dict(), strict=False)
     fe.eval()
@@ -44,7 +45,24 @@ def test_truncation_equals_full_model_blocks(name):
     assert fe.n_blocks == 3 and len(hs) == 4 and len(ref) == 25
     for a, b in zip(hs, ref[:4]):
         torch.testing.assert_close(a, b)
-    assert isinstance(fe.ssl.encoder.layer_norm, torch.nn.Identity)  # pre-LN: final layer_norm dropped
+    if pre_ln:  # pre-LN: the final layer_norm (applied after the last block) is dropped
+        assert isinstance(fe.ssl.encoder.layer_norm, torch.nn.Identity)
+    else:  # post-LN: encoder.layer_norm normalizes the INPUT of block 1 and must be kept, at block 1's LR
+        assert isinstance(fe.ssl.encoder.layer_norm, torch.nn.LayerNorm)
+        assert fe.block_of("encoder.layer_norm.weight") == 0
+
+
+def test_post_ln_front_end_trains_with_freezing():
+    model = tiny("light", K=3, freeze=1, name="tiny_postln").train()
+    model(X[:2]).sum().backward()
+    ln = model.frontend.ssl.encoder.layer_norm.weight
+    assert not ln.requires_grad and ln.grad is None  # below the frozen block 1
+    model = tiny("aasist", K=3, freeze=0, name="tiny_postln").train()
+    model(X[:2]).sum().backward()
+    ln = model.frontend.ssl.encoder.layer_norm.weight
+    assert ln.grad is not None
+    g = next(g for g in S.param_groups(model, lr=1.0, decay=0.5) if any(p is ln for p in g["params"]))
+    assert g["lr"] == pytest.approx(0.5 ** 2) and g["weight_decay"] == 0  # block 1 of K = 3, no decay on norms
 
 
 @pytest.mark.parametrize("backend", ["light", "aasist"])
@@ -154,7 +172,7 @@ def test_sampler_never_yields_non_train_rows():
     rows = {r for b in range(500) for r, _ in smp.batch(b)}
     assert (tr.iloc[sorted(rows)].split == "train").all()
     ds = D.TrainSet(df, "/nonexistent")  # the per-row assertion in the Dataset is the last line of defence
-    with pytest.raises(AssertionError, match="non-train"):
+    with pytest.raises(ValueError, match="non-train"):
         ds[(0, 0)]
 
 
@@ -224,6 +242,9 @@ def world(tmp_path, monkeypatch):
                      "test_internal_testlike": i >= 18})
     write_wavs(tmp_path, specs)
     write_wavs(tmp_path, [(f"data/raw/hgt_test/HGT{i}.wav", 3.5) for i in range(3)], seed=1)
+    (tmp_path / "data/raw/hgt_test" / FT.TEMPLATE_NAME).write_text(
+        "filename\tcm-score\n" + "".join(f"HGT{i}.wav\t0.006\n" for i in (2, 0, 1)))
+    monkeypatch.setattr(FT, "N_HGT", 3)
     m = pd.DataFrame(rows)
     monkeypatch.setattr(FT, "manifest", lambda: m)
     monkeypatch.setattr(FT, "ROOT", tmp_path)
@@ -259,16 +280,29 @@ def step_losses(run):
 def test_train_resume_reproduces_uninterrupted_run(world):
     FT, m, root, calls = world
     out = root / "runs"
-    FT.main(train_args(out, "full", 3))
-    FT.main(train_args(out, "split", 2))
-    FT.main(train_args(out, "split", 3))  # resumes from last.pth at step 2
+    FT.main(train_args(out, "full", 3, "--eval-every", "3"))
+    FT.main(train_args(out, "split", 2, "--eval-every", "3"))  # pause at step 2: saves, no unscheduled eval
+    FT.main(train_args(out, "split", 3, "--eval-every", "3"))  # resumes from last.pth at step 2
     full, recs = step_losses(out / "full")
     split, recs2 = step_losses(out / "split")
     assert sorted(full) == [1, 2, 3] and sorted(split) == [1, 2, 3]
     for s in (1, 2, 3):
         assert split[s] == pytest.approx(full[s], rel=1e-6, abs=1e-7), s
     ev = [r for r in recs2 if r["type"] == "eval"]
-    assert [r["step"] for r in ev] == [1, 2, 3]  # warm-up end, end of leg 1, end of leg 2
+    assert [r["step"] for r in ev] == [1, 3]  # warm-up end + scheduled; the pause at step 2 did not evaluate
+    assert [r["step"] for r in recs if r["type"] == "eval"] == [1, 3]
+    # paused + resumed == uninterrupted: same best.pth, same best / patience state, same eval numbers
+    ck_f = torch.load(out / "full" / "last.pth", map_location="cpu", weights_only=False)
+    ck_s = torch.load(out / "split" / "last.pth", map_location="cpu", weights_only=False)
+    for k in ("best", "bad", "evals", "step", "clips"):
+        assert ck_s["state"][k] == ck_f["state"][k], k
+    bf, bs = (torch.load(out / r / "best.pth", map_location="cpu") for r in ("full", "split"))
+    assert bf.keys() == bs.keys()
+    for k in bf:
+        torch.testing.assert_close(bs[k], bf[k], msg=k)
+    ev_f = [r for r in recs if r["type"] == "eval"]
+    for a_, b_ in zip(ev, ev_f):
+        assert a_["combined"] == pytest.approx(b_["combined"]) and a_["train_loss"] == pytest.approx(b_["train_loss"])
     for k in ("official_as_written", "brief_as_written", "combined", "eer", "clips", "train_loss", "slices"):
         assert k in ev[0]
     ck = torch.load(out / "split" / "last.pth", map_location="cpu", weights_only=False)
@@ -276,6 +310,58 @@ def test_train_resume_reproduces_uninterrupted_run(world):
     assert (out / "split" / "best.pth").exists() and (out / "cache").is_dir()
     # keep-awake: set for each training call, always cleared again (ES_CONTINUOUS alone)
     assert calls == [FT.ES_CONTINUOUS | FT.ES_SYSTEM_REQUIRED, FT.ES_CONTINUOUS] * 3
+
+
+def test_resume_refuses_a_changed_train_split(world, monkeypatch):
+    FT, m, root, _ = world
+    out = root / "runs"
+    FT.main(train_args(out, "sync", 1))
+    m2 = m.drop(index=3)  # a manifest SYNC between legs removed a train row
+    monkeypatch.setattr(FT, "manifest", lambda: m2)
+    with pytest.raises(SystemExit, match="different train split"):
+        FT.main(train_args(out, "sync", 2))
+
+
+class FakeOOMModel(torch.nn.Module):
+    """Raises CUDA-style OOM once for chunks above `limit` windows; logit = window mean."""
+
+    def __init__(self, limit):
+        super().__init__()
+        self.limit, self.sizes, self.raised = limit, [], 0
+
+    def forward(self, x):
+        self.sizes.append(len(x))
+        if len(x) > self.limit and not self.raised:
+            self.raised += 1
+            raise torch.OutOfMemoryError("CUDA out of memory (simulated)")
+        return x.mean(1)
+
+
+def test_eval_oom_halves_batch_and_retries():
+    import types
+
+    import finetune_ssl as FT
+    a = types.SimpleNamespace(eval_batch=8, amp="off")
+    x = np.random.default_rng(0).standard_normal((20, 50)).astype(np.float32)
+    logs = []
+    model = FakeOOMModel(limit=4)
+    s = FT.logits_of(model, x, torch.device("cpu"), a, log=logs.append)
+    np.testing.assert_allclose(s, x.mean(1), rtol=1e-6)  # every window scored once, in order
+    assert model.sizes[0] == 8 and model.sizes[1] == 4 and max(model.sizes[1:]) == 4
+    assert a.eval_batch == 4 and len(logs) == 1 and "halved to 4" in logs[0]
+    a.eval_batch = 1
+    with pytest.raises(torch.OutOfMemoryError):  # nothing left to halve
+        FT.forward_windows(FakeOOMModel(limit=0), x, torch.device("cpu"), a, log=logs.append)
+
+
+def test_score_batches_by_windows_not_clips(world):
+    import types
+    FT, m, root, _ = world
+    paths = m.path.tolist()[:10]  # 3-9 s clips -> up to 3 windows each
+    a = types.SimpleNamespace(eval_batch=5, amp="off", workers=0)
+    model = FakeOOMModel(limit=10**9)
+    s = FT.score_paths(model, paths, 3, torch.device("cpu"), a)
+    assert len(s) == 10 and np.isfinite(s).all() and max(model.sizes) <= 5
 
 
 def test_keep_awake_restored_on_error(monkeypatch):
@@ -342,15 +428,61 @@ def test_score_writes_config_first_and_never_reports(world, monkeypatch, capsys)
     assert not (root / "leaderboard.md").exists()
     printed = capsys.readouterr().out
     assert "hubctl.py put" in printed and "val_testlike" in printed and "combined" in printed
+    assert cfg["selected_on"] == "val_testlike combined minDCF" and cfg["forced"] is False
+
+
+def score_args(out, scores, name, *extra):
+    return ["--score", "--tiny", "--device", "cpu", "--out", str(out), "--name", name, "--scores-dir", str(scores),
+            "--workers", "0", *extra]
+
+
+def test_score_refuses_to_overwrite_config_and_records_manual_choice(world):
+    FT, m, root, _ = world
+    out, scores = root / "runs", root / "scores"
+    FT.main(train_args(out, "cf", 2))
+    _, cfg = FT.main(score_args(out, scores, "cf"))
+    FT.main(score_args(out, scores, "cf"))  # same checkpoint + same choice: allowed (idempotent)
+    other = {"center": "win3", "win3": "center"}[cfg["inference"]]
+    before = (out / "cf" / "config.json").read_text()
+    with pytest.raises(SystemExit, match="refusing to overwrite"):
+        FT.main(score_args(out, scores, "cf", "--windows", other))
+    assert (out / "cf" / "config.json").read_text() == before
+    torch.save({k: v + 1e-3 for k, v in torch.load(out / "cf" / "best.pth").items()}, out / "cf" / "best.pth")
+    with pytest.raises(SystemExit, match="refusing to overwrite"):  # a different checkpoint, same mode
+        FT.main(score_args(out, scores, "cf", "--windows", cfg["inference"]))
+    _, cfg2 = FT.main(score_args(out, scores, "cf", "--windows", other, "--force"))
+    saved = json.loads((out / "cf" / "config.json").read_text())
+    assert saved["inference"] == other and saved["forced"] is True and saved["selected_on"].startswith("manual")
+    assert saved["overwrite_forced"] is True and list(saved["val_testlike"]) == [other]
+
+
+def test_manual_windows_on_a_fresh_run_is_recorded(world):
+    FT, m, root, _ = world
+    out, scores = root / "runs", root / "scores"
+    FT.main(train_args(out, "mw", 2))
+    _, cfg = FT.main(score_args(out, scores, "mw", "--windows", "win3"))
+    assert cfg["inference"] == "win3" and cfg["forced"] is True and cfg["selected_on"].startswith("manual")
+    assert cfg["overwrite_forced"] is False
+
+
+def test_hgt_must_match_the_template(world):
+    FT, m, root, _ = world
+    out, scores = root / "runs", root / "scores"
+    FT.main(train_args(out, "ht", 2))
+    (root / "data/raw/hgt_test/HGT1.wav").unlink()
+    with pytest.raises(SystemExit, match="does not match the organizers' template"):
+        FT.main(score_args(out, scores, "ht", "--hgt"))
+    assert (out / "ht" / "config.json").exists() and not (scores / "ht__hgt.parquet").exists()
 
 
 # --- probe ---------------------------------------------------------------------------------------------------------
 
 def test_vram_probe_cpu_dry_run(tmp_path):
     import vram_probe as VP
-    rep = VP.main(["--device", "cpu", "--dry-run", "--configs", "af", "--out", str(tmp_path)])
+    rep = VP.main(["--device", "cpu", "--dry-run", "--configs", "af", "--out", str(tmp_path), "--eval-batch", "6"])
     by = {r["key"]: r for r in rep["results"]}
     assert by["a"]["clips_per_s"] > 0 and by["a"]["ckpt"] is True and not by["a"]["oom"]
+    assert by["a"]["eval_batch"] == 6 and by["a"]["eval_ok"] and by["a"]["eval_s"] > 0  # eval forward, states resident
     assert "skipped" in by["f"]  # 8-bit AdamW needs CUDA + bitsandbytes
     assert rep["pick"] == "a" and rep["throughput"]["loader"]["clips_per_s"] > 0
     assert rep["throughput"]["real"]["e2e_clips_per_s"] > 0
@@ -363,7 +495,8 @@ def test_vram_probe_pick_respects_budget():
     res = [{"key": "a", "clips_per_s": 40, "peak_reserved_gb": 4.0, "cap_gb": 7.36},
            {"key": "b", "clips_per_s": 60, "peak_reserved_gb": 6.5, "cap_gb": 7.36},  # > 85 % of the cap
            {"key": "c", "clips_per_s": 90, "peak_reserved_gb": 3.0, "cap_gb": 7.36, "spill": True},
-           {"key": "d", "clips_per_s": 99, "oom": True, "peak_reserved_gb": 7.3, "cap_gb": 7.36}]
+           {"key": "d", "clips_per_s": 99, "oom": True, "peak_reserved_gb": 7.3, "cap_gb": 7.36},
+           {"key": "e", "clips_per_s": 95, "peak_reserved_gb": 3.0, "cap_gb": 7.36, "eval_ok": False}]  # eval OOM
     key, limit = VP.pick(res)
     assert key == "a" and limit == pytest.approx(0.85 * 7.36)
     assert VP.spill_flag([1.0, 0.5, 0.5, 0.5, 2.0]) and not VP.spill_flag([1.0, 0.5, 0.5, 0.6, 0.55])

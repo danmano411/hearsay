@@ -37,22 +37,25 @@ def backend_name(name):
     return name
 
 
-def tiny_config(kind="wav2vec2", layers=24, dim=32):
+def tiny_config(kind="wav2vec2", layers=24, dim=32, pre_ln=True):
     """Random-init debug front end (no download): same conv strides as XLS-R (20 ms hop, 199 frames per 4 s),
-    pre-LN like XLS-R, 24 small blocks so K = 12 / 24 configs have the same shape as the real model."""
+    24 small blocks so K = 12 / 24 configs have the same shape as the real model. pre_ln=True is XLS-R's "stable layer
+    norm" layout; pre_ln=False is the post-LN wav2vec2-base / WavLM-base+ layout (group-norm conv, input layer_norm)."""
     Cfg = {"wav2vec2": Wav2Vec2Config, "wavlm": WavLMConfig}[kind]
     return Cfg(hidden_size=dim, num_hidden_layers=layers, num_attention_heads=2, intermediate_size=2 * dim,
                conv_dim=(16,) * 7, num_conv_pos_embeddings=16, num_conv_pos_embedding_groups=2,
-               do_stable_layer_norm=True, feat_extract_norm="layer")
+               do_stable_layer_norm=pre_ln, feat_extract_norm="layer" if pre_ln else "group")
 
 
-TINY = {"tiny": "wav2vec2", "tiny_wavlm": "wavlm"}
+# name -> (architecture, pre-LN)
+TINY = {"tiny": ("wav2vec2", True), "tiny_wavlm": ("wavlm", True), "tiny_postln": ("wav2vec2", False),
+        "tiny_wavlm_postln": ("wavlm", False)}
 
 
 def _load_ssl(name, attn, overrides):
     """-> (HF model, do_normalize). Falls back to eager attention when the architecture has no SDPA path (WavLM)."""
     if name in TINY:
-        cfg = tiny_config(TINY[name])
+        cfg = tiny_config(*TINY[name][:1], pre_ln=TINY[name][1])
         for k, v in overrides.items():
             setattr(cfg, k, v)
         try:
