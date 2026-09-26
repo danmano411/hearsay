@@ -27,6 +27,8 @@ CONFIGS = {
     "sonar": dict(repo="SONAR", license="CC-BY-NC-4.0 (research only)",
                   keep=lambda n: n.get("language", "en") == "en"),
     "dfadd": dict(repo="DFADD", license="MIT"),
+    "cvoicefake_en": dict(repo="CVoiceFake_small", license="CC-BY-4.0 (Common Voice CC0 underneath)",
+                          caps={"spoof": 4000}, codec="mp3", keep=lambda n: n.get("language") == "en"),
 }
 LABELS = {0: "bonafide", 1: "spoof"}
 
@@ -38,17 +40,18 @@ def asv19_attacks(local_dir):
     return {line.split()[1]: line.split()[3] for line in open(p) if line.strip()}
 
 
-def meta(name, notes, label, attacks):
+def meta(name, notes, label, attacks, container="flac"):
     if label == "bonafide":
         gen = "bonafide"
     else:
         g = (notes.get("attack_id") or notes.get("vocoder") or notes.get("system") or notes.get("generator")
+             or notes.get("system_id")
              or attacks.get(notes.get("utterance_id")) or "unknown")
         gen = f"{name}_{g}"
     codec = notes.get("codec")
     return dict(generator=gen, speaker=str(notes.get("speaker_id") or notes.get("speaker") or ""),
                 text_id=notes.get("base_id") or notes.get("utterance_id"),
-                codec_orig="flac" + (f";asv5_{codec}" if codec and codec != "-" else ""))
+                codec_orig=container + (f";asv5_{codec}" if codec and codec != "-" else ""))
 
 
 def ingest(name):
@@ -78,7 +81,7 @@ def ingest(name):
                     if r["path"] not in chosen:
                         continue
                     notes, label = json.loads(r["notes"]), LABELS[r["label"]]
-                    m = meta(name, notes, label, attacks)
+                    m = meta(name, notes, label, attacks, cfg.get("codec", "flac"))
                     stem = r["path"].rsplit("/", 1)[-1].rsplit(".", 1)[0]
                     yield dict(src=r["audio"]["bytes"], out=str(out_path(name, m["generator"], stem)),
                                label=label, source=name, license=cfg["license"], **m)

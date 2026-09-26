@@ -33,6 +33,11 @@ def test_convert_canonical_and_min_duration(tmp_path, monkeypatch):
     assert ic.convert(dict(src=None, out=str(tmp_path / "a.wav"), **meta))["duration"] == row["duration"]
 
 
+def test_out_path_keeps_dotted_stems_unique():
+    assert ic.out_path("s", "g", "a.0") != ic.out_path("s", "g", "a.1")
+    assert ic.out_path("s", "g", "a.0").name == "a.0.wav"
+
+
 def test_zip_member_bytes_ranged():
     buf = io.BytesIO()
     payloads = {"d/stored.wav": wav_bytes(0.1), "d/deflated.wav": wav_bytes(0.2)}
