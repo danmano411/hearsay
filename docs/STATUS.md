@@ -1,11 +1,11 @@
 # HEARSAY — live status
 
-_Updated by the cpu node (coordinator) on every task completion. Last update: 2026-09-26 05:35 EDT._
+_Updated by the cpu node (coordinator) on every task completion. Last update: 2026-09-26 05:40 EDT._
 
 ## ⚠ Needs the owner (on the GPU laptop)
 
-1. **Approve stopping the stuck CUDA benchmark.** It OOM'd at WavLM batch 64 and is crawling in Windows' shared-memory
-   fallback. The GPU is unusable until it stops. (Future runs cap GPU memory so this cannot recur.)
+1. ~~Approve stopping the stuck CUDA benchmark.~~ Resolved 05:39: Claude Code's low-memory reaper killed it. Its notice
+   says not to restart that benchmark without you, so the G1 throughput numbers wait for you (optional).
 2. *(Optional)* The GPU laptop's permission layer blocks its Claude from merging PRs. Not blocking: the cpu node merges
    GPU PRs after reviewing them, which is what the protocol requires.
 
@@ -25,7 +25,7 @@ Target (stopping criterion): ≤ 0.05, or 3 consecutive rungs improving < 0.005.
 | node | now | next |
 |---|---|---|
 | cpu (coordinator) | merged #22 #23 #24 #25 #26 after cross-review; hub restarted on hardened code | C4 heads as gpu embeddings arrive; C5 fusion |
-| gpu (RTX 5050 Laptop, 8 GB, CUDA 13) | GPU blocked (see above). Code done + merged: G1 memory cap (#32), G4 DataLoader (#31), **G5 XLS-R fine-tune (#34, 65 tests)** | the moment the GPU frees: VRAM probe → G5 run 1 |
+| gpu (RTX 5050 Laptop, 8 GB, CUDA 13) | GPU blocked (see above). Code done + merged: G1 memory cap (#32), G4 DataLoader (#31), **G5 XLS-R fine-tune (#34, 65 tests)** | **running: G5 VRAM probe → run 1 (XLS-R K12, back end A)** |
 
 ## Board
 
@@ -34,6 +34,7 @@ all-defaults submission bug (#24), a listener that could die on a hub restart (#
 
 ## Log
 
+- 05:39 GPU free; G5 VRAM probe started on CUDA.
 - 05:35 G5 end-to-end fine-tune code merged (#34) after two review rounds (resume/early-stop parity, OOM-safe eval, frozen config.json). README + committed frozen eval subsets (#30).
 - 04:45 #27 fusion, #28 error analysis, #29 G5 plan, #31 AASIST DataLoader merged after cross-review. GPU queue reordered: G5 first.
 - 04:30 Fallback submission from R1_lgbm_all_full validated (1,671 rows, 1,671 distinct scores).
