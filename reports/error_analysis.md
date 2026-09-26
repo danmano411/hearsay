@@ -1,6 +1,6 @@
 # Error analysis — where the models fail
 
-Source: `hearsay.evaluate.per_source()` on `test_internal_testlike` (frozen, 6,823 real / 2,924 fake). For a *source*,
+Source: `hearsay.evaluate.per_source()` on `val_testlike` (decisions) and `test_internal_testlike` (report-only).
 the row scores that source's real clips against all fakes; for a *generator*, that generator's fakes against all reals.
 Higher minDCF = that slice is where the errors come from.
 
@@ -72,5 +72,5 @@ LibriSeVoc; success = moving playht / unit_speech and the asvspoof5 real slice.
 3. **Newest TTS (codec language models) is the frontier.** Few clips, but consistently the hardest. More of them in
    training (full MLAAD is gated; see `docs/external_data.md`) would be the next data investment.
 
-Next: the same table for each GPU rung, to see which model fixes which slice; that decides fusion weights more
-honestly than the aggregate number.
+Next: the same decision table on `val_testlike` for each GPU rung, to see which model fixes which slice; those
+`val_testlike` slices inform fusion and model choice. Per-rung `test_internal_testlike` tables stay report-only.
