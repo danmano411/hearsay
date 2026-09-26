@@ -1,10 +1,10 @@
 """Extract frozen SSL layer embeddings (mean+std pool of every hidden layer) for R4.
 
     PYTHONPATH=src python scripts/extract_ssl.py --model wavlm_base_plus --threads 5 --train-n 16000
-    PYTHONPATH=src python scripts/extract_ssl.py --model xlsr_300m --threads 5 --train-n 6000 --eval testlike
+    PYTHONPATH=src python scripts/extract_ssl.py --model xlsr_300m --threads 5 --train-n 6000 --eval testlike         --train-from wavlm_base_plus --max-blocks 12
 
-Rows (in priority order, so an interrupted run still has the most useful ones): val_testlike + test_internal_testlike,
-HGT test (inference only), a stratified train subset, then the rest of `val` (--eval full).
+Rows in priority order (val_testlike + train first so heads can be developed while the rest extracts):
+val_testlike, a stratified train subset, test_internal_testlike, HGT test (inference only), rest of `val` (--eval full).
 Output: data/features/<model>/index.parquet (path, set, shard, row) + shard_XXXX.npy float16 (n, layers, 2*dim).
 Resumable: the index is frozen on first run; finished shards are skipped.
 """
@@ -43,7 +43,7 @@ def stratified(df, n, seed=0):
 
 def build_index(model, train_n, eval_mode, base):
     m = manifest()
-    ev = m[m.val_testlike | m.test_internal_testlike].assign(set="eval")
+    vt, ti = m[m.val_testlike].assign(set="val_testlike"), m[m.test_internal_testlike].assign(set="test_internal_testlike")
     hgt = sorted((DATA / "raw" / "hgt_test").glob("*.wav"))
     hg = pd.DataFrame({"path": [p.relative_to(ROOT).as_posix() for p in hgt], "set": "hgt",
                        "duration": [sf.info(p).duration for p in hgt]})
@@ -52,7 +52,7 @@ def build_index(model, train_n, eval_mode, base):
     else:
         pool = m[m.split == "train"]
     tr = stratified(pool, train_n).assign(set="train")
-    parts = [ev, hg, tr]
+    parts = [vt, tr, ti, hg]
     if eval_mode == "full":
         parts.append(m[(m.split == "val") & ~m.val_testlike].assign(set="val_rest"))
     idx = []
@@ -80,6 +80,7 @@ def main():
     ap.add_argument("--eval", choices=["full", "testlike"], default="full")
     ap.add_argument("--train-from", default=None, help="take the train subset from this model's index (nested)")
     ap.add_argument("--batch", type=int, default=8)
+    ap.add_argument("--max-blocks", type=int, default=None, help="truncate the transformer (cost ~ blocks)")
     a = ap.parse_args()
 
     out = DATA / "features" / a.model
@@ -93,7 +94,7 @@ def main():
         idx.to_parquet(ip, index=False)
     print(idx.groupby("set").size().to_string(), flush=True)
 
-    emb = SSLEmbedder(a.model, threads=a.threads)
+    emb = SSLEmbedder(a.model, threads=a.threads, max_blocks=a.max_blocks)
     pool = ThreadPoolExecutor(2)  # decode + prep overlaps with the forward pass
     todo = [s for s in sorted(idx.shard.unique()) if not (out / f"shard_{s:04d}.npy").exists()]
     t0, done = time.time(), 0

@@ -29,12 +29,19 @@ def center(y, seconds=MAX_SECONDS):
 
 
 class SSLEmbedder:
-    def __init__(self, name, threads=None):
+    def __init__(self, name, threads=None, max_blocks=None):
         if threads:
             torch.set_num_threads(threads)
         hf = MODELS.get(name, name)
         self.fe = AutoFeatureExtractor.from_pretrained(hf)
         self.model = AutoModel.from_pretrained(hf).eval()
+        if max_blocks:  # keep only the first transformer blocks (hidden_states then has max_blocks + 1 entries)
+            enc = self.model.encoder
+            enc.layers = enc.layers[:max_blocks]
+            # pre-LN (XLS-R "stable layer norm") applies encoder.layer_norm only to the LAST hidden state; drop it so
+            # the truncated model's last entry equals block max_blocks of the full model, like every other entry
+            if hasattr(enc, "layer_norm") and self.model.config.do_stable_layer_norm:
+                enc.layer_norm = torch.nn.Identity()
 
     @torch.inference_mode()
     def __call__(self, waves):
