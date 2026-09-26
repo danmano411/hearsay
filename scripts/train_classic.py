@@ -116,7 +116,8 @@ def main():
         pd.Series(gbm.booster_.feature_importance("gain"), feats).sort_values().to_csv(OUT / f"R0_{tag}_gain.csv")
 
     # ---- R1: classic features after prep()
-    sets = {"all": SPEC + BIO, "spec": SPEC, "bio": BIO}
+    # nolow: ablation without the 0-200 Hz contrast band (sub-200 Hz = rumble / recording-chain high-pass, a channel cue)
+    sets = {"all": SPEC + BIO, "spec": SPEC, "bio": BIO, "nolow": [f for f in SPEC + BIO if not f.startswith("contrast0")]}
     models = {}
     for tag, feats in sets.items():
         print(f"R1 lgbm {tag} ({len(feats)} feats)", flush=True)
