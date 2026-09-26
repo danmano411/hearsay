@@ -187,6 +187,22 @@ Warnings: CRLF line endings, rows still at 0.006, fewer than 3 distinct values (
 5. Are rows with duplicate or missing filenames rejected, or scored after a join?
 6. Is the scored set exactly the 1,671 template rows, or is a hidden subset used?
 
+## 7. Resolved (2026-09-26)
+
+Answers from the organizers and the NSA reviewer, after our first file scored minDCF 1.0:
+- **Q1 direction:** the scorer is *not* given `1 − score`. It reads **higher = bonafide**, the ASVspoof convention,
+  despite the brief. A file written as the brief says ranks every clip backwards and scores exactly 1.0 (our first
+  file; reproduced locally: minDCF 1.0, EER 99.5 % on `test_internal_testlike`). The flipped file scored
+  **minDCF 0.0584, EER 2.5 %** on the HGT test.
+- **Q2/Q3 costs:** **Pspoof = 0.3** (the test's ~30 % spoof share), Cmiss = 1, Cfa = 4, in `calculate_metrics.py`
+  (the zip we had said 0.5). In ASVspoof terms, a *false alarm* is a spoof accepted as bonafide. So the official
+  normalized cost is **P(real flagged) + 1.71 × P(fake accepted)** at the best threshold: the `official_as_written`
+  reading, with Pspoof 0.3.
+- **Selection:** best of the initial and final submission (lowest minDCF) counts.
+- Our models under the official settings (`test_internal_testlike`): R5 0.0138, R4ft 0.0192, R1 0.169. The ranking
+  of models is the same as under our earlier readings. minDCF depends only on the score order, so the submission's
+  scores did not need to change, only their direction.
+
 ## References
 
 * ASVspoof5 evaluation package: <https://github.com/asvspoof-challenge/asvspoof5> (the local copy has the organizers'
