@@ -7,16 +7,24 @@ synthetic)**. The metric is the organizers' ASVspoof 5 Track-1 **minDCF** (lower
 
 ## Where we are
 
-Headline = combined minDCF on `test_internal_testlike`: 9,747 held-out clips at the test's ~70/30 real/fake mix. About
-half its fakes (1,434 of 2,924) come from three generators held out of training entirely. It is frozen, and nothing is
-ever tuned on it.
+**Official score on the HGT test set: minDCF 0.0584, EER 2.5 %** (organizers' scorer: Pspoof 0.3, Cfa 4, higher
+score = real, so submissions are written flipped; see [`docs/scoring.md`](docs/scoring.md) §7). The submitted system
+is **R5**: an XLS-R-300M model fine-tuned end to end, fused with a classic-feature + speech-biology model. Full story:
+[`reports/final_results.md`](reports/final_results.md). How far it transfers to public benchmarks it never saw:
+[`reports/generalization.md`](reports/generalization.md).
+
+Our own headline = combined minDCF on `test_internal_testlike`: 9,747 held-out clips at the test's ~70/30 real/fake mix.
+About half its fakes (1,434 of 2,924) come from three generators held out of training entirely. It is frozen, and
+nothing is ever tuned on it. The table below is the ladder up to R1; the final rungs are in `reports/final_results.md`
+(R4ft 0.0282, R5 0.0218).
 
 | model | what it is | headline |
 |---|---|---|
 | R0 raw → after `prep()` | LightGBM on 9 trivial cues (duration, silence, level, bandwidth) | 0.542 → 0.921 |
 | R1 | LightGBM on 228 spectral + speech-biology features, full train set | **0.253** |
 | R5 (smoke) | LR fusion of R1's spectral-only and biology-only models ([`scripts/fuse.py`](scripts/fuse.py)) | 0.260 |
-| R4ft (planned, next on GPU) | XLS-R-300M fine-tuned end to end, AASIST-style back end ([plan](plans/08_ssl_aasist.md)) | — |
+| **R4ft** | XLS-R-300M (12 blocks) fine-tuned end to end + light back end ([report](reports/r4ft_xlsr.md)) | **0.0282** |
+| **R5 (submitted)** | LR fusion of R4ft + R1 | **0.0218** (optimistic; picked after seeing it) |
 
 ## The approach in one picture (planned pipeline; see the table above for what has run)
 

@@ -9,6 +9,12 @@ _Updated by the cpu node (coordinator) on every task completion. Last update: 20
 2. *(Optional)* The GPU laptop's permission layer blocks its Claude from merging PRs. Not blocking: the cpu node merges
    GPU PRs after reviewing them, which is what the protocol requires.
 
+## 🏁 Official result: minDCF 0.0584, EER 2.5 % on the HGT test
+
+The organizers confirmed their scorer: Pspoof 0.3, Cfa 4, **higher score = real** (the brief says the opposite).
+Our brief-direction file scored 1.0; the flipped file (`submission/HearsayScoreKey4GeorgiaMellon_FLIPPED_higher-is-real.tsv`)
+scored 0.0584. Best of initial + final counts, and any final must be flipped. Details: `docs/scoring.md` §7.
+
 ## ✅ Stopping criterion met: submission ready
 
 | rank | model | headline | val_testlike | submitted |
@@ -33,6 +39,8 @@ GitHub issues #10–#21 (`gh issue list`). Every PR is reviewed by the other nod
 all-defaults submission bug (#24), a listener that could die on a hub restart (#25), and an over-broad temp-file filter (#26).
 
 ## Log
+
+- 2026-09-26 afternoon: official HGT score for the flipped file, minDCF 0.0584, EER 2.5 %. Scorer confirmed (Pspoof 0.3, Cfa 4, higher = real).
 
 - 10:53 Submission written for team GeorgiaMellon, validated against the organizers' HearsayScoreKey4TeamX.tsv.
 - 09:35 Owner amendment: submission switched to the R4ft + R1 fusion (ties on test-free checks, better on the HGT-like proxy); 0.0282 stays the honest estimate.
