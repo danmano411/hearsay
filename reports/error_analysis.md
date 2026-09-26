@@ -4,7 +4,37 @@ Source: `hearsay.evaluate.per_source()` on `test_internal_testlike` (frozen, 6,8
 the row scores that source's real clips against all fakes; for a *generator*, that generator's fakes against all reals.
 Higher minDCF = that slice is where the errors come from.
 
-## R1_lgbm_all_full (classic features + biology, headline 0.253)
+> **Which set drives decisions.** Anything that changes training (sampling weights, augmentation, model choice) is
+> derived from **`val_testlike`** only. The `test_internal_testlike` tables further down are report-only, for judges.
+> Deriving training choices from the headline set would leak into the headline. The first draft of this report did
+> that (a ×2 weight for LibriSeVoc reals), and the `val_testlike` table below shows it was an artifact.
+
+## Decision table: R1_lgbm_all_full on `val_testlike` (6,274 real / 2,689 fake)
+
+| real source (vs all fakes) | n real | combined | EER % |
+|---|---|---|---|
+| **asvspoof5** | 266 | **0.501** | 14.4 |
+| asvspoof2019_la | 559 | 0.278 | 8.0 |
+| librisevoc | 251 | 0.245 | 6.8 |
+| cvoicefake_en | 422 | 0.238 | 6.2 |
+| lj_real | 18 | 0.233 | 5.6 |
+| librispeech | 1,621 | 0.227 | 6.1 |
+| ljspeech | 1,167 | 0.187 | 5.1 |
+| sonar | 222 | 0.154 | 4.4 |
+| in_the_wild | 1,179 | 0.136 | 4.2 |
+| mlaad_tiny | 526 | 0.095 | 2.7 |
+
+| fake generator (vs all reals), n ≥ 100 | n fake | combined |
+|---|---|---|
+| playht (held out of train) | 470 | **0.302** |
+| unit_speech (held out) | 470 | 0.220 |
+| openvoicev2 | 281 | 0.004 |
+| diffgan_tts (held out) | 500 | 0.000 |
+
+Decisions taken from it: upweight **asvspoof5 reals ×2** in G5 sampling (the only clear outlier); no special weight for
+LibriSeVoc; success = moving playht / unit_speech and the asvspoof5 real slice.
+
+## Report-only: R1_lgbm_all_full on `test_internal_testlike` (headline 0.253)
 
 **Real clips that look fake** (combined minDCF, source's reals vs all fakes):
 
@@ -31,8 +61,8 @@ Higher minDCF = that slice is where the errors come from.
 
 ## What it tells us
 
-1. **Channel, not speech.** The worst real slices are corpora whose *recording chain* differs (ASVspoof 5 bona fide is
-   heavily processed audiobook speech; LibriSeVoc reals are LibriTTS). Classic spectral features partly learn the
+1. **Channel, not speech.** The worst real slice on both sets is ASVspoof 5 bona fide, whose *recording chain* differs
+   (heavily processed audiobook speech). Classic spectral features partly learn the
    corpus, so reals from an unusual chain look fake. Expect the same risk on the HGT test if its reals come from a chain
    we lack. Hence the class-symmetric codec/noise/resampler augmentation, and why SSL front ends, which model speech
    rather than the channel, should help most here.
