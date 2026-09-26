@@ -8,6 +8,8 @@ in template order ('filename<TAB>cm-score', LF, no BOM), and runs scripts/score.
   --max-unscored allows some; unscored rows get DEFAULT = 0.3 (docs/scoring.md §4), never the template's 0.006.
 - Probability models write their scores as-is. Margin/logit models need --sigmoid, a fixed monotone map
   (minDCF unchanged). The choice is per model type, never decided from HGT scores.
+- --higher-is-real writes 1 - score: the organizers' scorer reads a higher score as real (ASVspoof direction),
+  the opposite of the brief (docs/scoring.md section 7). Every file sent for scoring must use it.
 - Scores are written with 10 significant digits so rounding doesn't create ties (ties never break in our favour).
   For large logits pass --temperature T (sigmoid(x / T)) so the sigmoid itself doesn't saturate into ties.
 """
@@ -26,7 +28,7 @@ from hearsay.audio import DATA, ROOT  # noqa: E402
 DEFAULT = 0.3
 
 
-def build(scores, template=TEMPLATE, sigmoid=False, max_unscored=0, temperature=1.0):
+def build(scores, template=TEMPLATE, sigmoid=False, max_unscored=0, temperature=1.0, higher_is_real=False):
     """scores: Series filename -> score. -> (template filenames, values, n_unscored). Raises ValueError."""
     names = [ln.split("\t")[0] for ln in Path(template).read_text().rstrip("\n").split("\n")[1:]]
     if not temperature > 0:  # 0 divides by zero; a negative T would silently reverse the ranking
@@ -44,7 +46,8 @@ def build(scores, template=TEMPLATE, sigmoid=False, max_unscored=0, temperature=
     n_unscored = int(vals.isna().sum())
     if n_unscored > max_unscored:
         raise ValueError(f"{n_unscored} template rows unscored (allowed: {max_unscored})")
-    return names, vals.fillna(DEFAULT).to_numpy(), n_unscored
+    vals = vals.fillna(DEFAULT).to_numpy()
+    return names, (1 - vals if higher_is_real else vals), n_unscored
 
 
 def main():
@@ -54,6 +57,8 @@ def main():
     ap.add_argument("--out", default=None)
     ap.add_argument("--sigmoid", action="store_true", help="model outputs margins/logits, not probabilities")
     ap.add_argument("--max-unscored", type=int, default=0)
+    ap.add_argument("--higher-is-real", action="store_true",
+                    help="write 1 - score: the organizers' scorer reads higher = real (docs/scoring.md section 7)")
     ap.add_argument("--temperature", type=float, default=1.0,
                     help="with --sigmoid: sigmoid(x / T). Large logits saturate to exactly 0/1 at 10 digits and tie; size T "
                          "from the model's VALIDATION logit range (never from HGT scores). Rank-preserving, minDCF-neutral.")
@@ -63,7 +68,8 @@ def main():
 
     s = pd.read_parquet(DATA / "scores" / f"{a.model}__hgt.parquet").set_index("filename").score
     try:
-        names, vals, n_unscored = build(s, sigmoid=a.sigmoid, max_unscored=a.max_unscored, temperature=a.temperature)
+        names, vals, n_unscored = build(s, sigmoid=a.sigmoid, max_unscored=a.max_unscored, temperature=a.temperature,
+                                         higher_is_real=a.higher_is_real)
     except ValueError as e:
         sys.exit(f"ERROR {e}")
     if n_unscored and a.sigmoid:

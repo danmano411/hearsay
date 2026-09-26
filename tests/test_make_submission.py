@@ -51,3 +51,10 @@ def test_temperature_must_be_positive(template):
     for bad in (0, -8):
         with pytest.raises(ValueError, match="temperature"):
             build(s, template, sigmoid=True, temperature=bad)
+
+
+def test_higher_is_real_flips_every_value_including_defaults(template):
+    s = pd.Series([0.9, 0.2], index=["HGT0.wav", "HGT1.wav"])
+    _, plain, _ = build(s, template, max_unscored=3)
+    _, flipped, _ = build(s, template, max_unscored=3, higher_is_real=True)
+    assert np.allclose(plain + flipped, 1.0)

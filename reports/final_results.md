@@ -4,6 +4,27 @@
 fine-tuned XLS-R model with the classic-feature model), chosen by an owner amendment. Unbiased headline estimate:
 **0.0282** (R4ft alone); the fusion measured 0.0218 on the same set, but that number helped choose it, so it is optimistic.
 
+## Official result (organizers, 2026-09-26)
+
+The organizers scored our submission on the 1,671-clip HGT test set: **minDCF 0.0584, EER 2.5 %**.
+
+| | held-out estimate (`test_internal_testlike`, same settings) | **HGT test (official)** |
+|---|---|---|
+| minDCF, Pspoof 0.3 / Cfa 4, higher = real | 0.0138 (R5) · 0.0192 (R4ft alone) | **0.0584** |
+| EER | 0.54 % (R5) | **2.5 %** |
+
+- **Scorer, now confirmed:** `calculate_metrics.py` from the ASVspoof5 evaluation package with **Pspoof = 0.3,
+  Cmiss = 1, Cfa = 4**, reading a **higher score as bonafide (real)**. The brief says the opposite (1.0 = synthetic).
+  Our first file followed the brief and scored exactly 1.0: every clip ranked backwards. The flipped copy
+  (`1 − score`) is the one scored above (`docs/scoring.md` §7).
+- **Best of two:** the organizers score the initial and the final submission and keep the lower minDCF. Any file we
+  send from now on must use the flipped direction (`make_submission.py --higher-is-real`).
+- **The HGT test is harder than our held-out set** (0.058 vs 0.014), as expected: its sources and generators differ
+  from anything we held out. The gap was already visible from validation to headline (0.012 → 0.028). Nothing was
+  tuned on the HGT audio or on this feedback.
+- In plain terms: at the equal-error point about 1 in 40 real clips and 1 in 40 fakes are misjudged, so roughly 97-98 %
+  of test clips are classified correctly.
+
 Headline = `test_internal_testlike`: 9,747 held-out clips, 70/30 real/fake, 1,434 of its 2,924 fakes from three
 generators never seen in training. It was scored once per model, after that model's choices were frozen, and never used
 to select anything. minDCF: 0 = perfect, 1 = trivial.
