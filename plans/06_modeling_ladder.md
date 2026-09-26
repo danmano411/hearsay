@@ -16,3 +16,21 @@ CPU budget: SSL embeddings extracted once, cached to `data/features/<model>.npy`
 extraction stays < ~6 h. Fine-tuning SSL end-to-end is out of scope on CPU (ponytail: revisit if a GPU appears).
 
 Final deliverable: `submission/<team>_scores.tsv` — same rows/order as the template, `filename<TAB>cm-score`, 0 = real, 1 = fake.
+
+## Execution details (added after phases 1-5 landed)
+
+Data: 180,726 clips (56,962 real / 123,764 fake) across 14 sources, 126+ generators.
+
+- **Preprocessing** (`src/hearsay/preprocess.py`, every rung, train *and* test): DC removal → silence trim → **7 kHz low-pass**
+  → RMS normalization. The low-pass exists because the organizers' LJ reals keep 7–8 kHz energy that properly
+  resampled clips lack; since we can't inspect test audio, we remove the band so it can't decide anything.
+  Class-symmetric augmentation (`augment()`: mp3 round trip, noise 15–40 dB SNR, resampler round trip) during training.
+- **Crops**: test clips are 3.0–13.6 s (median 3.4 s) → train on random 4 s crops, score full clips (or center 4 s for fixed-size nets).
+- **Evaluation** (`src/hearsay/evaluate.py`): `report(name, scores_df)` → leaderboard rows for `val`, `val_testlike`,
+  `test_internal_testlike` (headline, never tuned on) in both minDCF readings + combined; caches scores to
+  `data/scores/<name>.parquet` for fusion. `per_source()` gives the error breakdown.
+- **Model selection metric**: `combined` minDCF on `val_testlike` until organizers clarify the cost reading.
+- **HGT test**: each final rung also scores `data/raw/hgt_test/*.wav` (inference only) → `data/scores/<name>__hgt.parquet`.
+
+Stages: **A** (parallel) sim completion · R0/R1 classic ML · R3 AASIST · R4 SSL embeddings + heads →
+**B** R2 CNN + best-rung improvements → **C** R5 fusion, default-value strategy, submission, docs.
