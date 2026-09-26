@@ -11,6 +11,7 @@ from hearsay.audio import MANIFEST_COLUMNS, MANIFESTS, PROCESSED
 from hearsay.data.splits import assign_splits
 
 OUT = PROCESSED / "manifest.parquet"
+FROZEN = PROCESSED / "eval_subsets_frozen.parquet"  # path, val_testlike, test_internal_testlike (see docs/dataset.md)
 
 
 def main():
@@ -31,6 +32,13 @@ def main():
         print(f"WARNING: dropping {dups.sum()} rows with a path listed twice")
         df = df[~dups]
     df = assign_splits(df.sort_values("path", ignore_index=True))
+    if FROZEN.exists():
+        # Eval subsets are frozen so scores stay comparable across the leaderboard: sampling them afresh lets new
+        # sources displace existing rows. Rows added after the freeze are never in them.
+        fz = pd.read_parquet(FROZEN).set_index("path")
+        for c in ("val_testlike", "test_internal_testlike"):
+            df[c] = df["path"].map(fz[c]).fillna(False).astype(bool)
+        print(f"eval subsets frozen from {FROZEN.name} ({len(fz)} rows)")
     df.to_parquet(OUT, index=False)
 
     print(f"\n{OUT}: {len(df)} rows")

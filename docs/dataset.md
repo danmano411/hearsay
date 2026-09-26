@@ -105,6 +105,16 @@ restrict LOGO evaluation to one `split`.
 On the given data alone (DiffSSD + lj_real), bonafide is 195 / 18 / 29 across train / val / test_internal. That
 leaves `val_testlike` with only 18 real clips, which is why the external real corpora matter.
 
+### Frozen eval subsets (2026-09-26)
+
+`split` is stable when sources are added, but the test-like subsets are re-sampled: adding the 5,189 finished sim
+clips moved 65 rows in or out of `val_testlike` and 86 of `test_internal_testlike`, which would make new scores
+incomparable with the leaderboard. Since then `make_splits.py` reads `data/processed/eval_subsets_frozen.parquet`
+(`path, val_testlike, test_internal_testlike`, snapshot of the 180,726-row manifest every leaderboard entry was scored
+on) and keeps those two columns exactly; rows added later are never in them. `val_testlike` = 8,963 rows
+(6,274 / 2,689), `test_internal_testlike` = 9,747 rows (6,823 / 2,924). `logo_fold` is not frozen (not used for
+headline numbers).
+
 ## Checks
 
 `scripts/check_manifest.py` asserts each of the following, then prints class counts per split and per generator:
