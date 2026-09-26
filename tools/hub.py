@@ -6,6 +6,7 @@ State lives in data/hub/: messages.jsonl (append-only log), heartbeats.json, hub
 """
 import argparse
 import hashlib
+import hmac
 import json
 import os
 import secrets
@@ -30,8 +31,8 @@ lock = threading.Lock()
 def safe_path(rel):
     rel = unquote(rel).replace("\\", "/").lstrip("/")
     p = (ROOT / rel).resolve()
-    ok = any(rel == a or rel.startswith(a) for a in ALLOWED) and ROOT.resolve() in p.parents
-    return (p, rel) if ok and ".." not in rel.split("/") else (None, rel)
+    ok = any(rel.startswith(a) if a.endswith("/") else rel == a for a in ALLOWED) and ROOT.resolve() in p.parents
+    return (p, rel) if ok and ".." not in rel.split("/") and ":" not in rel else (None, rel)
 
 
 def sha256(path):
@@ -58,14 +59,23 @@ class H(BaseHTTPRequestHandler):
         self.end_headers()
         self.wfile.write(body)
 
+    def _tok_ok(self):
+        return hmac.compare_digest(self.headers.get("X-Hearsay-Token", "").encode("latin-1"), TOKEN.encode())
+
     def _auth(self):
-        if self.headers.get("X-Hearsay-Token") != TOKEN:
+        if not self._tok_ok():
             self._json(401, {"error": "bad token"})
             return False
         return True
 
     def _body_json(self):
-        return json.loads(self.rfile.read(int(self.headers.get("Content-Length", 0))) or b"{}")
+        n = int(self.headers.get("Content-Length", 0))
+        if not 0 <= n <= 1 << 20:
+            raise ValueError("bad Content-Length")
+        m = json.loads(self.rfile.read(n) or b"{}")
+        if not isinstance(m, dict):
+            raise ValueError("body must be a JSON object")
+        return m
 
     def log_message(self, fmt, *args):
         with open(HUB / "hub.log", "a", encoding="utf-8") as f:
@@ -77,14 +87,21 @@ class H(BaseHTTPRequestHandler):
         u = urlparse(self.path)
         q = {k: v[0] for k, v in parse_qs(u.query, keep_blank_values=True).items()}
         if u.path == "/msg":
-            after, to = int(q.get("after", 0)), q.get("to")
-            msgs = [m for m in read_msgs() if m["id"] > after and (to is None or m["to"] in (to, "all"))]
+            try:
+                after, to = int(q.get("after", 0)), q.get("to")
+            except ValueError:
+                return self._json(400, {"error": "after must be an int"})
+            with lock:
+                msgs = read_msgs()
+            msgs = [m for m in msgs if m["id"] > after and (to is None or m["to"] in (to, "all"))]
             return self._json(200, msgs)
         if u.path == "/status":
-            hb = json.loads((HUB / "heartbeats.json").read_text()) if (HUB / "heartbeats.json").exists() else {}
+            with lock:  # heartbeat writes truncate-then-write; an unlocked read can see an empty file
+                hb = json.loads((HUB / "heartbeats.json").read_text()) if (HUB / "heartbeats.json").exists() else {}
+                n_msgs = len(read_msgs())
             for v in hb.values():
                 v["age_s"] = round(time.time() - v["t"])
-            return self._json(200, {"heartbeats": hb, "messages": len(read_msgs())})
+            return self._json(200, {"heartbeats": hb, "messages": n_msgs})
         if u.path.startswith("/files/"):
             p, rel = safe_path(u.path[len("/files/"):])
             if p is None:
@@ -112,10 +129,14 @@ class H(BaseHTTPRequestHandler):
         if not self._auth():
             return
         path = urlparse(self.path).path
-        if path == "/msg":
+        try:
             m = self._body_json()
+        except ValueError as e:
+            self.close_connection = True
+            return self._json(400, {"error": str(e)})
+        if path == "/msg":
             missing = {"from", "to", "type", "body"} - set(m)
-            if missing or m["type"] not in TYPES:
+            if missing or not isinstance(m["type"], str) or m["type"] not in TYPES:
                 return self._json(400, {"error": f"missing {sorted(missing)} or type not in {sorted(TYPES)}"})
             with lock:
                 m.update(id=len(read_msgs()) + 1, ts=time.strftime("%Y-%m-%dT%H:%M:%S"))
@@ -123,7 +144,7 @@ class H(BaseHTTPRequestHandler):
                     f.write(json.dumps(m) + "\n")
             return self._json(200, {"id": m["id"]})
         if path == "/heartbeat":
-            b = self._body_json()
+            b = m
             with lock:
                 f = HUB / "heartbeats.json"
                 hb = json.loads(f.read_text()) if f.exists() else {}
@@ -141,31 +162,43 @@ class H(BaseHTTPRequestHandler):
     def do_PUT(self):
         u = urlparse(self.path)
         p, rel = safe_path(u.path[len("/files/"):]) if u.path.startswith("/files/") else (None, u.path)
-        if self.headers.get("X-Hearsay-Token") != TOKEN or p is None:
+        if not self._tok_ok() or p is None or p.is_dir():
             self._drain()
         if not self._auth():
             return
         if not u.path.startswith("/files/"):
             return self._json(404, {"error": "unknown endpoint"})
-        if p is None:
+        if p is None or p.is_dir():
             return self._json(403, {"error": f"not allowed: {rel}"})
-        n, h = int(self.headers["Content-Length"]), hashlib.sha256()
+        want, n, h = self.headers.get("X-Sha256", ""), self.headers.get("Content-Length", ""), hashlib.sha256()
+        if not n.isdigit() or len(want) != 64:
+            self.close_connection = True
+            return self._json(400, {"error": "PUT needs Content-Length and X-Sha256"})
+        n = int(n)
         p.parent.mkdir(parents=True, exist_ok=True)
         tmp = p.with_name(p.name + f".part{secrets.token_hex(4)}")
-        with open(tmp, "wb") as f:
-            left = n
-            while left:
-                b = self.rfile.read(min(CHUNK, left))
-                if not b:
+        try:
+            with open(tmp, "wb") as f:
+                left = n
+                while left:
+                    b = self.rfile.read(min(CHUNK, left))
+                    if not b:
+                        break
+                    f.write(b)
+                    h.update(b)
+                    left -= len(b)
+            if left or want != h.hexdigest():
+                return self._json(400, {"error": "incomplete upload or sha256 mismatch"})
+            for i in range(20):  # Windows: replace fails while a GET still has the old file open
+                try:
+                    os.replace(tmp, p)  # atomic: readers never see a half file
                     break
-                f.write(b)
-                h.update(b)
-                left -= len(b)
-        want = self.headers.get("X-Sha256")
-        if left or (want and want != h.hexdigest()):
+                except PermissionError:
+                    if i == 19:
+                        return self._json(409, {"error": "target busy (being downloaded); retry"})
+                    time.sleep(0.5)
+        finally:
             tmp.unlink(missing_ok=True)
-            return self._json(400, {"error": "incomplete upload or sha256 mismatch"})
-        os.replace(tmp, p)  # atomic: readers never see a half file
         self._json(200, {"path": rel, "bytes": n, "sha256": h.hexdigest()})
 
 
@@ -180,6 +213,8 @@ def main():
     if not tf.exists():
         tf.write_text(secrets.token_urlsafe(16))
     TOKEN = tf.read_text().strip()
+    if len(TOKEN) < 16:
+        raise SystemExit(f"hub token in {tf} is empty/too short")
     print(f"hub on http://{a.host}:{a.port}  (token in {tf})", flush=True)
     ThreadingHTTPServer((a.host, a.port), H).serve_forever()
 
