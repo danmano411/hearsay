@@ -27,7 +27,7 @@ import pandas as pd
 import soundfile as sf
 import torch
 
-from hearsay import audio
+from hearsay import audio, device
 from hearsay.sim import copysyn, tts
 
 LJ_DIR = audio.DATA / "raw" / "lj_real"
@@ -180,8 +180,11 @@ def main():
     ap.add_argument("--n", type=int, default=None, help="override clips per generator (smoke tests)")
     ap.add_argument("--threads", type=int, default=1)
     ap.add_argument("--reverse", action="store_true", help="work from the end: a 2nd process on one generator")
+    device.add_argument(ap)
     a = ap.parse_args()
     torch.set_num_threads(a.threads)
+    tts.DEVICE = copysyn.DEVICE = device.resolve(a.device)
+    print(f"device {tts.DEVICE}", flush=True)
     text = texts()
     print(f"{len(text)} clean LJ sentences", flush=True)
     for g in a.only:

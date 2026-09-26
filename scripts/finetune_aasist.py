@@ -15,6 +15,7 @@ import pandas as pd
 import torch
 import torch.nn.functional as F
 
+from hearsay import device
 from hearsay.audio import DATA, ROOT, SR, load
 from hearsay.evaluate import manifest
 from hearsay.metrics import min_dcf
@@ -31,8 +32,11 @@ p.add_argument("--lr", type=float, default=2e-5)
 p.add_argument("--eval-every", type=int, default=150, help="steps")
 p.add_argument("--patience", type=int, default=4, help="evals without improvement")
 p.add_argument("--tag", default="r3_aasist_ft", help="output file stem under data/models")
+device.add_argument(p)
 a = p.parse_args()
 torch.set_num_threads(a.threads)
+dev = device.resolve(a.device)
+print(f"device {dev}", flush=True)
 OUT = DATA / "models"
 BEST, LAST, LOG = OUT / f"{a.tag}.pth", OUT / f"{a.tag}_last.pth", OUT / f"{a.tag}_log.jsonl"
 WIN_S = aasist_wrap.NB_SAMP / SR  # 4.0375 s
@@ -64,13 +68,13 @@ def train_clip(path, rng):
 @torch.no_grad()
 def evaluate(model):
     model.eval()
-    s = np.concatenate([(lambda o: (o[:, 0] - o[:, 1]).numpy())(model(val_x[i:i + 32].contiguous())[1])
+    s = np.concatenate([(lambda o: (o[:, 0] - o[:, 1]).cpu().numpy())(model(val_x[i:i + 32].to(dev))[1])
                         for i in range(0, len(val_x), 32)])
     model.train()
     return {k: min_dcf(s, val_y, k) for k in ("official_as_written", "brief_as_written", "combined")}
 
 
-model = aasist_wrap.load().to(memory_format=torch.channels_last)
+model = aasist_wrap.load(device=dev).to(memory_format=torch.channels_last)
 opt = torch.optim.Adam(model.parameters(), lr=a.lr, weight_decay=1e-4)
 state = {"step": 0, "best": None, "bad": 0}
 if LAST.exists():
@@ -106,8 +110,10 @@ t0, losses = time.time(), []
 while time.time() - t0 < a.hours * 3600 and state["bad"] < a.patience:
     idx = [(state["step"] * a.batch + j) % len(train) for j in range(a.batch)]
     rows = train.iloc[idx]
-    x = torch.from_numpy(np.stack([train_clip(q, rng) for q in rows.path]))
-    y = torch.from_numpy((rows.label == "bonafide").astype(int).to_numpy())  # AASIST convention: 1 = bonafide
+    # ponytail: clips are loaded/augmented serially on the CPU; on a GPU this loop is data-bound. Move train_clip
+    # into a torch DataLoader with workers if GPU utilization stays low.
+    x = torch.from_numpy(np.stack([train_clip(q, rng) for q in rows.path])).to(dev)
+    y = torch.from_numpy((rows.label == "bonafide").astype(int).to_numpy()).to(dev)  # AASIST: 1 = bonafide
     _, out = model(x)
     loss = F.cross_entropy(out, y)
     opt.zero_grad(); loss.backward(); opt.step()

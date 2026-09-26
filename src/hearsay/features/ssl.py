@@ -29,12 +29,13 @@ def center(y, seconds=MAX_SECONDS):
 
 
 class SSLEmbedder:
-    def __init__(self, name, threads=None, max_blocks=None):
+    def __init__(self, name, threads=None, max_blocks=None, device="cpu"):
         if threads:
             torch.set_num_threads(threads)
         hf = MODELS.get(name, name)
+        self.device = torch.device(device)
         self.fe = AutoFeatureExtractor.from_pretrained(hf)
-        self.model = AutoModel.from_pretrained(hf).eval()
+        self.model = AutoModel.from_pretrained(hf).eval().to(self.device)
         if max_blocks:  # keep only the first transformer blocks (hidden_states then has max_blocks + 1 entries)
             enc = self.model.encoder
             enc.layers = enc.layers[:max_blocks]
@@ -51,5 +52,7 @@ class SSLEmbedder:
         n = min(len(w) for w in waves)
         waves = [center(w, n / SR) for w in waves]
         x = self.fe(waves, sampling_rate=SR, return_tensors="pt")
-        hs = torch.stack(self.model(x.input_values, output_hidden_states=True).hidden_states, 1)  # (B, L, T, D)
-        return torch.cat([hs.mean(2), hs.std(2)], -1).numpy()
+        # fp32 on every device (no autocast) so GPU shards stay comparable with the CPU-extracted ones
+        out = self.model(x.input_values.to(self.device), output_hidden_states=True)
+        hs = torch.stack(out.hidden_states, 1)  # (B, L, T, D)
+        return torch.cat([hs.mean(2), hs.std(2)], -1).cpu().numpy()
