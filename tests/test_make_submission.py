@@ -44,3 +44,10 @@ def test_unscored_rows_and_sigmoid(template):
     _, v1, _ = build(big, template, sigmoid=True, max_unscored=3)
     _, v8, _ = build(big, template, sigmoid=True, max_unscored=3, temperature=8)
     assert float(f"{v1[0]:.10g}") == float(f"{v1[1]:.10g}") and float(f"{v8[0]:.10g}") < float(f"{v8[1]:.10g}")
+
+
+def test_temperature_must_be_positive(template):
+    s = pd.Series([0.5] * 5, index=[f"HGT{i}.wav" for i in range(5)])
+    for bad in (0, -8):
+        with pytest.raises(ValueError, match="temperature"):
+            build(s, template, sigmoid=True, temperature=bad)
