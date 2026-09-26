@@ -28,11 +28,11 @@ def _model_class():
     return mod.Model
 
 
-def load(weights=PRETRAINED):
+def load(weights=PRETRAINED, device="cpu"):
     conf = json.loads((AASIST_DIR / "config" / "AASIST_ASVspoof5.conf").read_text())
     model = _model_class()(conf["model_config"])
     model.load_state_dict(torch.load(weights, map_location="cpu"))
-    return model.eval()
+    return model.eval().to(device)  # AASIST.py moves its sinc filter bank to x.device itself
 
 
 def windows(y, max_windows=1):
@@ -49,8 +49,8 @@ def windows(y, max_windows=1):
 def score_batch(model, clips, max_windows=1):
     """clips: list of 1-D float arrays (already prep()'d or raw) -> spoof log-odds per clip (window mean)."""
     wins = [windows(y, max_windows) for y in clips]
-    x = torch.from_numpy(np.concatenate(wins).astype(np.float32))
+    x = torch.from_numpy(np.concatenate(wins).astype(np.float32)).to(next(model.parameters()).device)
     _, logits = model(x)
-    s = (logits[:, 0] - logits[:, 1]).numpy()
+    s = (logits[:, 0] - logits[:, 1]).cpu().numpy()
     bounds = np.cumsum([0] + [len(w) for w in wins])
     return np.array([s[a:b].mean() for a, b in zip(bounds[:-1], bounds[1:])])

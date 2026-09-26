@@ -9,6 +9,7 @@ import torch
 
 from hearsay.audio import SR
 
+DEVICE = torch.device("cpu")  # set by scripts/run_sim.py --device before the first model load (Griffin-Lim stays CPU)
 # Mel settings for Griffin-Lim, chosen to match a typical 16 kHz TTS front end (80 bins, 1024/256).
 N_FFT, HOP, N_MELS = 1024, 256, 80
 
@@ -28,7 +29,7 @@ def griffin_lim(y, sr=SR, n_iter=32):
 def _speecht5():
     from transformers import SpeechT5FeatureExtractor, SpeechT5HifiGan
     fe = SpeechT5FeatureExtractor.from_pretrained("microsoft/speecht5_tts")
-    voc = SpeechT5HifiGan.from_pretrained("microsoft/speecht5_hifigan").eval()
+    voc = SpeechT5HifiGan.from_pretrained("microsoft/speecht5_hifigan").eval().to(DEVICE)
     return fe, voc
 
 
@@ -38,7 +39,7 @@ def hifigan(y, sr=SR):
     assert sr == 16000, "SpeechT5 HiFi-GAN is a 16 kHz vocoder"
     fe, voc = _speecht5()
     m = fe(audio_target=y, sampling_rate=sr, return_tensors="pt")["input_values"][0]  # (frames, 80)
-    return _match(voc(m).numpy(), y)
+    return _match(voc(m.to(DEVICE)).cpu().numpy(), y)
 
 
 def _match(out, ref):

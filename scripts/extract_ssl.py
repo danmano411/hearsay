@@ -2,6 +2,7 @@
 
     PYTHONPATH=src python scripts/extract_ssl.py --model wavlm_base_plus --threads 5 --train-n 16000
     PYTHONPATH=src python scripts/extract_ssl.py --model xlsr_300m --threads 5 --train-n 6000 --eval testlike         --train-from wavlm_base_plus --max-blocks 12
+    GPU: --device auto (default) picks cuda when available; raise --batch (e.g. 64) and drop --max-blocks.
 
 Rows in priority order (val_testlike + train first so heads can be developed while the rest extracts):
 val_testlike, a stratified train subset, test_internal_testlike, HGT test (inference only), rest of `val` (--eval full).
@@ -16,6 +17,7 @@ import numpy as np
 import pandas as pd
 import soundfile as sf
 
+from hearsay import device
 from hearsay.audio import DATA, ROOT
 from hearsay.evaluate import manifest
 from hearsay.features.ssl import SSLEmbedder, center
@@ -81,6 +83,7 @@ def main():
     ap.add_argument("--train-from", default=None, help="take the train subset from this model's index (nested)")
     ap.add_argument("--batch", type=int, default=8)
     ap.add_argument("--max-blocks", type=int, default=None, help="truncate the transformer (cost ~ blocks)")
+    device.add_argument(ap)
     a = ap.parse_args()
 
     out = DATA / "features" / a.model
@@ -94,7 +97,9 @@ def main():
         idx.to_parquet(ip, index=False)
     print(idx.groupby("set").size().to_string(), flush=True)
 
-    emb = SSLEmbedder(a.model, threads=a.threads, max_blocks=a.max_blocks)
+    dev = device.resolve(a.device)
+    print(f"device {dev}", flush=True)
+    emb = SSLEmbedder(a.model, threads=a.threads, max_blocks=a.max_blocks, device=dev)
     pool = ThreadPoolExecutor(2)  # decode + prep overlaps with the forward pass
     todo = [s for s in sorted(idx.shard.unique()) if not (out / f"shard_{s:04d}.npy").exists()]
     t0, done = time.time(), 0

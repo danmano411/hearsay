@@ -14,6 +14,7 @@ import numpy as np
 import pandas as pd
 import torch
 
+from hearsay import device
 from hearsay.audio import DATA, ROOT, load
 from hearsay.evaluate import SCORES, eval_masks, manifest, report
 from hearsay.models import aasist_wrap
@@ -29,8 +30,11 @@ p.add_argument("--max-windows", type=int, default=1,
 p.add_argument("--testlike-only", action="store_true", help="skip val rows outside val_testlike (cheaper comparisons)")
 p.add_argument("--threads", type=int, default=3)
 p.add_argument("--batch", type=int, default=16)
+device.add_argument(p)
 a = p.parse_args()
 torch.set_num_threads(a.threads)
+dev = device.resolve(a.device)
+print(f"device {dev}", flush=True)
 
 if a.hgt:
     paths = sorted(p.relative_to(ROOT).as_posix() for p in (DATA / "raw" / "hgt_test").glob("*.wav"))
@@ -46,7 +50,7 @@ done = set(pd.read_csv(cache).path) if cache.exists() else set()
 todo = [q for q in paths if q not in done]
 print(f"{len(paths)} clips, {len(todo)} to score", flush=True)
 
-model = aasist_wrap.load(a.weights).to(memory_format=torch.channels_last)
+model = aasist_wrap.load(a.weights, dev).to(memory_format=torch.channels_last)
 new = not cache.exists()
 t0 = time.time()
 with open(cache, "a", newline="") as f:

@@ -21,14 +21,18 @@ minDCF: 0 = perfect, 1 = trivial. Full table: [`reports/leaderboard.md`](../repo
 
 ## Remaining work, in order
 
-1. **Add GPU support** (none of the scripts take a device yet): add `--device` (default `cuda` if available) to
-   `scripts/extract_ssl.py` + `src/hearsay/features/ssl.py`, `scripts/run_aasist.py`, `scripts/finetune_aasist.py`
-   (+ `src/hearsay/models/aasist_wrap.py`), and `scripts/run_sim.py`; move model and batches `.to(device)`; use
-   `torch.autocast` for SSL extraction. Raise batch sizes.
+1. ✅ **GPU support**: `extract_ssl.py`, `run_aasist.py`, `finetune_aasist.py` and `run_sim.py` take
+   `--device auto|cpu|cuda|cuda:N` (default `auto` = cuda when available; helper `src/hearsay/device.py`).
+   Setup on the GPU machine: `requirements.txt` pins CPU torch, so install a CUDA build first, e.g.
+   `pip install torch torchaudio --index-url https://download.pytorch.org/whl/cu128` (match the driver), then the rest.
+   Check: `python -c "import torch; print(torch.cuda.is_available())"`. Raise `--batch` (e.g. 64 for SSL, 64–128 for
+   AASIST). SSL extraction stays fp32 on purpose so GPU shards match the CPU-extracted ones. Known ceiling:
+   `finetune_aasist.py` loads/augments clips serially on the CPU (marked `ponytail:`), so move it to a DataLoader with
+   workers if GPU utilization is low. `train_ssl_heads.py` stays CPU (tiny heads on cached features).
 2. **Finish the sim** (`scripts/run_sim.py`, resumable): vits_ljs ~1,220/1,500, speecht5 ~420/420, mms ~545/1,000; then
    rebuild `data/processed/manifests/sim.parquet` and rerun `scripts/make_splits.py` (existing rows keep their split).
 3. **R4 SSL** (biggest expected gain): finish WavLM extraction (resumes from the last completed shard), then XLS-R-300M
-   (`--model xls_r_300m`, drop `--max-blocks` on GPU), with a larger train subset (`--train-n 40000+`). Then
+   (`--model xlsr_300m`, drop `--max-blocks` on GPU), with a larger train subset (`--train-n 40000+`). Then
    `scripts/train_ssl_heads.py sweep|heads|plot --model <m> --report --hgt`.
 4. **R3 AASIST**: finish zero-shot scoring (`run_aasist.py --name R3_aasist_zeroshot_prep`, and `--raw` for comparison);
    resume fine-tuning from `data/models/r3_aasist_ft_last.pth` with more data (`--per-class 30000`) and hours.
