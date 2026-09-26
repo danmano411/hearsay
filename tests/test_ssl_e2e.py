@@ -492,11 +492,17 @@ def test_vram_probe_cpu_dry_run(tmp_path):
 
 def test_vram_probe_pick_respects_budget():
     import vram_probe as VP
-    res = [{"key": "a", "clips_per_s": 40, "peak_reserved_gb": 4.0, "cap_gb": 7.36},
-           {"key": "b", "clips_per_s": 60, "peak_reserved_gb": 6.5, "cap_gb": 7.36},  # > 85 % of the cap
-           {"key": "c", "clips_per_s": 90, "peak_reserved_gb": 3.0, "cap_gb": 7.36, "spill": True},
-           {"key": "d", "clips_per_s": 99, "oom": True, "peak_reserved_gb": 7.3, "cap_gb": 7.36},
-           {"key": "e", "clips_per_s": 95, "peak_reserved_gb": 3.0, "cap_gb": 7.36, "eval_ok": False}]  # eval OOM
+    cap = 7.30  # GiB: the RTX 5050's first real probe
+    res = [{"key": "a", "clips_per_s": 35, "peak_alloc_gb": 4.92, "peak_reserved_gb": 6.42, "cap_gb": cap},
+           # the real probe's faster config: reserved 94.5 % of the cap is allocator slack, allocated only 67 % -> ok
+           {"key": "b", "clips_per_s": 42, "peak_alloc_gb": 4.91, "peak_reserved_gb": 6.90, "cap_gb": cap},
+           {"key": "c", "clips_per_s": 60, "peak_alloc_gb": 6.5, "peak_reserved_gb": 6.6, "cap_gb": cap},  # alloc > 85 %
+           {"key": "g", "clips_per_s": 70, "peak_alloc_gb": 4.0, "peak_reserved_gb": 7.0, "cap_gb": cap},  # reserved > 95 %
+           {"key": "h", "clips_per_s": 90, "peak_alloc_gb": 3.0, "peak_reserved_gb": 3.0, "cap_gb": cap, "spill": True},
+           {"key": "d", "clips_per_s": 99, "oom": True, "peak_alloc_gb": 7.3, "peak_reserved_gb": 7.3, "cap_gb": cap},
+           {"key": "e", "clips_per_s": 95, "peak_alloc_gb": 3.0, "peak_reserved_gb": 3.0, "cap_gb": cap,
+            "eval_ok": False}]  # eval OOM
     key, limit = VP.pick(res)
-    assert key == "a" and limit == pytest.approx(0.85 * 7.36)
+    assert key == "b" and limit == pytest.approx(0.85 * cap)
+    assert VP.pick([dict(r, peak_alloc_gb=None) for r in res])[0] is None  # no allocated number -> never picked
     assert VP.spill_flag([1.0, 0.5, 0.5, 0.5, 2.0]) and not VP.spill_flag([1.0, 0.5, 0.5, 0.6, 0.55])
