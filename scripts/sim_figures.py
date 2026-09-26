@@ -3,7 +3,7 @@
   PYTHONPATH=src .venv/Scripts/python scripts/sim_figures.py [--n 60]
 
 Figures: one utterance through every stage (spectrogram, group delay) and per-generator averages over
---n clips (long-term spectrum / high band, modulation spectrum). Uses only real LJ, sim and DiffSSD audio
+--n clips (long-term spectrum / high band, modulation spectrum). Uses only real LJ/LibriSpeech, sim and DiffSSD audio
 (never HGT test audio).
 """
 import argparse
@@ -40,6 +40,8 @@ def groups(n):
     rng = random.Random(0)
     pick = lambda fs: rng.sample(sorted(fs), min(n, len(fs)))  # noqa: E731
     g = {"real LJ": pick(list((audio.DATA / "raw" / "lj_real").glob("*.wav")))}
+    src = pd.read_parquet(SIM / "_copysyn_sources.parquet")  # the real LibriSpeech clips that were copy-synthesized
+    g["real LibriSpeech"] = pick([audio.ROOT / q for q in src.loc[src.source == "librispeech", "path"]])
     for d in sorted(SIM.glob("sim_*")):
         g[d.name] = pick(list(d.glob("*.wav")))
     for d in sorted(DIFFSSD.iterdir()):
@@ -121,10 +123,10 @@ def fig_averages(n):
     sims = [k for k in lt if not k.startswith("diffssd/")]
     diffs = [k for k in lt if k.startswith("diffssd/")]
     fig, ax = plt.subplots(1, 2, figsize=(13, 4.6), sharey=True)
-    for a, keys, title in [(ax[0], sims, "real LJ vs sim generators"), (ax[1], ["real LJ"] + diffs, "real LJ vs DiffSSD")]:
+    for a, keys, title in [(ax[0], sims, "real LJ / LibriSpeech vs sim generators"), (ax[1], ["real LJ"] + diffs, "real LJ vs DiffSSD")]:
         for k in keys:
-            a.plot(f / 1000, lt[k] - lt[k][(f > 300) & (f < 1000)].mean(), lw=2.2 if k == "real LJ" else 1,
-                   color="k" if k == "real LJ" else None, label=k.replace("diffssd/", ""))
+            a.plot(f / 1000, lt[k] - lt[k][(f > 300) & (f < 1000)].mean(), lw=2.2 if k.startswith("real") else 1,
+                   color={"real LJ": "k", "real LibriSpeech": "0.5"}.get(k), label=k.replace("diffssd/", ""))
         a.axvspan(4, 8, color="0.9", zorder=-1)
         a.set(title=title, xlabel="frequency (kHz)", xlim=(0, 8), ylim=(-75, 10))
         a.legend(fontsize=7, ncol=2)
