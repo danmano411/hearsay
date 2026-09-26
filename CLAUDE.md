@@ -36,4 +36,4 @@ HackGT 2026 NSA challenge: score 1,671 test clips 0.0 (real) → 1.0 (synthetic)
 - Run with `PYTHONPATH=src`; tests `python -m pytest -q tests`. Torch scripts take `--device auto|cpu|cuda`.
 - `data/`, `third_party/`, venvs are gitignored: never commit audio, parquet, npy, or weights.
 - Write a plan in `plans/` before a new phase; branch `<node>/<issue#>-<slug>` + PR; the other node reviews before
-  merge; write findings for judges in `reports/`/`docs/`. Commits end with a `Co-Authored-By: Claude ...` line.
+  merge; write findings for judges in `reports/`/`docs/`. No AI attribution in commits or PRs (no Co-Authored-By trailers, no "Generated with" footers): owner rule.
