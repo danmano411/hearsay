@@ -105,6 +105,9 @@ Eval subsets are the frozen ones (`docs/dataset.md`), so the numbers below are d
 - R0 after `prep()` stays near chance (0.92), so the shortcut neutralization holds with the new sim data.
 - HGT scored with `R1_lgbm_all_full` → `data/scores/R1_lgbm_all_full__hgt.parquet` (new best classic model).
 - Figure: `docs/figures/r1_summary_full.png`.
+- Comparability: `val_testlike` / `test_internal_testlike` are frozen, so those columns compare across runs. Plain
+  `val` gained 587 sim rows, so `val` rows of `_full` models are **not** comparable with older `val` rows.
+  Counts: 163,741 rows featurized in total, of which 135,436 are train.
 
 ## What it teaches us
 
