@@ -9,6 +9,7 @@ import hashlib
 import hmac
 import json
 import os
+import re
 import secrets
 import threading
 import time
@@ -24,6 +25,7 @@ ALLOWED = ("data/scores/", "data/features/", "data/models/", "data/processed/sim
 TYPES = {"ASSIGN", "CLAIM", "PROGRESS", "ARTIFACT", "DONE", "REVIEW_REQUEST", "REVIEW", "QUESTION", "ANSWER",
          "BLOCKED", "SYNC", "STOP", "NOTE"}
 CHUNK = 1 << 20
+PART = re.compile(r"\.part[0-9a-f]{8}$")  # in-flight upload temp names (see do_PUT)
 
 lock = threading.Lock()
 
@@ -110,9 +112,9 @@ class H(BaseHTTPRequestHandler):
                 if not p.is_dir():
                     return self._json(404, {"error": "no such dir"})
                 # in-flight uploads (*.part<hex>) are never listed; ?sha adds sha256 per file (costs a full read)
-                items = [{"path": x.relative_to(ROOT).as_posix(), "bytes": x.stat().st_size,
+                items = [{"path": x.relative_to(ROOT.resolve()).as_posix(), "bytes": x.stat().st_size,
                           **({"sha256": sha256(x)} if "sha" in q else {})}
-                         for x in sorted(p.rglob("*")) if x.is_file() and ".part" not in x.name]
+                         for x in sorted(p.rglob("*")) if x.is_file() and not PART.search(x.name)]
                 return self._json(200, items)
             if not p.is_file():
                 return self._json(404, {"error": "no such file"})

@@ -134,14 +134,16 @@ def cmd_get(a):
 
 def cmd_pull(a):
     """Download every file under a hub dir that is missing locally or differs (size; with --sha also sha256)."""
-    d = a.dir.strip("/")
+    d = a.dir.replace("\\", "/").strip("/")
     items = jcall("GET", f"/files/{d}/?list" + ("&sha" if a.sha else ""))
     for it in items:  # never trust server paths: must stay under the requested dir
-        if not it["path"].startswith(d + "/") or ".." in it["path"].split("/"):
+        if not it["path"].startswith(d + "/") or ".." in it["path"].split("/") or ":" in it["path"]:
             sys.exit(f"refusing server path {it['path']!r}")
 
     def stale(it):
         p = ROOT / it["path"]
+        if a.sha and "sha256" not in it:
+            sys.exit("hub does not support ?sha yet: restart it with the current tools/hub.py")
         return not p.exists() or p.stat().st_size != it["bytes"] or (a.sha and sha(p) != it["sha256"])
     todo = [it for it in items if stale(it)]
     print(f"{len(todo)} of {len(items)} files to fetch", flush=True)

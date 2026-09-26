@@ -39,7 +39,13 @@ def main():
     # sources displace existing rows. Rows added after the freeze are never in them.
     fz = pd.read_parquet(FROZEN).set_index("path")
     lost = ~fz.index.isin(df["path"])
-    assert not lost.any(), f"{lost.sum()} frozen eval paths are no longer in any source manifest"
+    if lost.any():
+        raise SystemExit(f"{lost.sum()} frozen eval paths are no longer in any source manifest")
+    split = df.set_index("path")["split"]
+    for c, s in (("val_testlike", "val"), ("test_internal_testlike", "test_internal")):
+        bad = (split.reindex(fz.index[fz[c]]) != s).sum()
+        if bad:
+            raise SystemExit(f"{bad} frozen {c} rows are no longer in split {s}")
     for c in ("val_testlike", "test_internal_testlike"):
         df[c] = df["path"].map(fz[c]).fillna(False).astype(bool)
     print(f"eval subsets frozen from {FROZEN.name} ({len(fz)} rows)")
