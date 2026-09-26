@@ -30,7 +30,7 @@ usually close that gap, but 8 GB of VRAM makes memory the binding constraint, so
 | Part | Choice | Why |
 |---|---|---|
 | Front end | `facebook/wav2vec2-xls-r-300m` (24 pre-LN blocks, d = 1024, FFN 4096, 16 heads; 7-layer conv feature encoder, 20 ms hop → **199 frames per 4 s**) | 128-language pretraining. It is a common front end among strong ASVspoof5 systems. |
-| Depth | **Truncate to the first K = 12 blocks** by default (same truncation as `SSLEmbedder(max_blocks=)`, including dropping the final pre-LN `layer_norm`). K is fixed from the G3 frozen layer sweep on `val_testlike`: K = min(24, best layer + 4), floored at 8. | Spoofing cues sit in lower/middle SSL layers (our WavLM sweep: layer 3 best). Halving depth halves compute and VRAM (§3). |
+| Depth | **Truncate to the first K = 12 blocks** by default (same truncation as `SSLEmbedder(max_blocks=)`, including dropping the final pre-LN `layer_norm`). Run 1 uses K = 12 without waiting for G3 (coordinator's scheduling call: frozen-SSL heads trail R1, so G3/G2 extraction now queues behind G5). If a G3 frozen layer sweep on `val_testlike` exists by run 3, K = min(24, best layer + 4), floored at 8. | Spoofing cues sit in lower/middle SSL layers (our WavLM sweep: layer 3 best). Halving depth halves compute and VRAM (§3). |
 | Frozen | Conv feature encoder always frozen, run under `no_grad` (standard wav2vec2 fine-tuning). Optionally also the lowest N transformer blocks (fallback ladder, §4). | Its activations on raw audio dominate memory (§3). |
 | Back end A, light (run first) | Learned softmax weights over the K+1 hidden states → Linear 1024→256 → attentive statistics pooling → Linear → 1 logit | Tiny, stable, uses every layer ("sensitive layer selection" style). |
 | Back end B, AASIST | Tak-2022 SSL-AASIST: Linear 1024→128 → (1, 128, 199) "spectrogram" → max-pool → AASIST residual encoder + spectral/temporal graph attention + HS-GAL. Graph modules imported in place from `third_party/asvspoof5/Baseline-AASIST/models/AASIST.py` (MIT, not copied), like `aasist_wrap.py`. | The ASVspoof5 top-system back end. Its sinc front end is replaced by the SSL features. |
@@ -153,29 +153,32 @@ Train = `split == "train"`: 135,436 rows (43,865 bonafide / 91,571 spoof, 11 rea
 140 fake generators, durations 3.0–58.5 s, median 7.1 s). Re-pull the manifest if a `SYNC` arrives, but only between
 runs, never mid-run.
 
-**Class-balanced, source-diverse sampling** (includes the cpu node's error-analysis input). Every micro-batch has
-4 bonafide + 4 spoof. Within a label, cells are **(source, label)**, drawn with probability ∝ √n. The two real sources
-R1 gets most wrong on `test_internal_testlike` get ×2: **asvspoof5 reals** (R1 combined 0.55) and **librisevoc reals**
-(0.40). Both look fake to R1, which suggests a channel/corpus effect. Within a fake cell, generators are also drawn
-∝ √n, then a clip uniformly at random. Resulting shares (from the current manifest):
+**Class-balanced, source-diverse sampling.** Every micro-batch has 4 bonafide + 4 spoof. Within a label, cells are
+**(source, label)**, drawn with probability ∝ √n. One real source gets ×2: **asvspoof5 reals**, the clear outlier in
+R1's per-source slices **on `val_testlike`** (combined 0.501; next are asvspoof2019_la 0.278, librisevoc 0.245,
+cvoicefake 0.238, librispeech 0.227, ljspeech 0.187, in_the_wild 0.136). R1 scores them as fake, which suggests a
+channel/corpus effect. The weight is taken from `val_testlike` slices only. An earlier draft also weighted librisevoc
+×2 from a `test_internal_testlike` error analysis; that was dropped because steering training with the headline set is
+leakage. ×1.5 on asvspoof2019_la is a run-2 option if its slice stays high. Within a fake cell, generators are also
+drawn ∝ √n, then a clip uniformly at random. Resulting shares (from the current manifest):
 
 | Bonafide cell | n | natural % | sampled % | | Spoof cell | n | natural % | sampled % |
 |---|---|---|---|---|---|---|---|---|
-| librispeech | 13,075 | 29.8 | 16.0 | | diffssd | 44,049 | 48.1 | 24.1 |
-| ljspeech | 9,612 | 21.9 | 13.7 | | wavefake | 9,022 | 9.9 | 10.9 |
-| **asvspoof5** | 2,277 | 5.2 | **13.4** | | asvspoof5 | 8,789 | 9.6 | 10.8 |
-| **librisevoc** | 2,114 | 4.8 | **12.9** | | librisevoc | 7,988 | 8.7 | 10.3 |
-| mlaad_tiny | 4,620 | 10.5 | 9.5 | | mlaad_tiny | 4,688 | 5.1 | 7.9 |
-| in_the_wild | 3,509 | 8.0 | 8.3 | | in_the_wild | 4,563 | 5.0 | 7.8 |
-| cvoicefake_en | 3,340 | 7.6 | 8.1 | | sim | 3,929 | 4.3 | 7.2 |
-| asvspoof2019_la | 2,941 | 6.7 | 7.6 | | cvoicefake_en | 3,090 | 3.4 | 6.4 |
-| sonar | 1,812 | 4.1 | 6.0 | | asvspoof2019_la | 2,297 | 2.5 | 5.5 |
-| dfadd | 370 | 0.8 | 2.7 | | dfadd | 1,877 | 2.0 | 5.0 |
-| lj_real (organizers') | 195 | 0.4 | 2.0 | | sonar | 1,279 | 1.4 | 4.1 |
+| librispeech | 13,075 | 29.8 | 17.1 | | diffssd | 44,049 | 48.1 | 24.1 |
+| ljspeech | 9,612 | 21.9 | 14.7 | | wavefake | 9,022 | 9.9 | 10.9 |
+| **asvspoof5** | 2,277 | 5.2 | **14.3** | | asvspoof5 | 8,789 | 9.6 | 10.8 |
+| librisevoc | 2,114 | 4.8 | 6.9 | | librisevoc | 7,988 | 8.7 | 10.3 |
+| mlaad_tiny | 4,620 | 10.5 | 10.2 | | mlaad_tiny | 4,688 | 5.1 | 7.9 |
+| in_the_wild | 3,509 | 8.0 | 8.9 | | in_the_wild | 4,563 | 5.0 | 7.8 |
+| cvoicefake_en | 3,340 | 7.6 | 8.6 | | sim | 3,929 | 4.3 | 7.2 |
+| asvspoof2019_la | 2,941 | 6.7 | 8.1 | | cvoicefake_en | 3,090 | 3.4 | 6.4 |
+| sonar | 1,812 | 4.1 | 6.4 | | asvspoof2019_la | 2,297 | 2.5 | 5.5 |
+| dfadd | 370 | 0.8 | 2.9 | | dfadd | 1,877 | 2.0 | 5.0 |
+| lj_real (organizers') | 195 | 0.4 | 2.1 | | sonar | 1,279 | 1.4 | 4.1 |
 
 lj_real is drawn ≈ 1.7 times per clip per virtual epoch, which is enough to learn the organizers' channel without
 memorizing a single speaker. The sampler is a seeded generator whose state is saved in every checkpoint (§8). The ×2
-weights and the √ exponent may be retuned between runs based on the `val_testlike` slices (§7). That tunes on
+weight and the √ exponent may be retuned between runs based on the `val_testlike` slices (§7). That tunes on
 validation, which is allowed. It never uses test slices.
 
 **Augmentation.** `hearsay.preprocess.augment()` is class-symmetric and applied to real and fake alike, before
@@ -198,9 +201,10 @@ once, on `val_testlike` only.
 - **Logged per eval** (`log.jsonl`): step, clips seen, train loss, LRs, `official_as_written`, `brief_as_written`,
   `combined`, EER, `max_memory_reserved`, clips/s.
 - **Slices on `val_testlike`** (diagnostic, every eval, via `hearsay.evaluate.per_source(scores, "val_testlike")`):
-  each real source's minDCF vs all fakes, each fake source and generator vs all reals. Watch list, from R1's errors:
-  asvspoof5 reals, librisevoc reals, **playht** (470 fakes in `val_testlike`, held out of train) and
-  **unit_speech** (470, held out), plus codec-LM TTS generators (tiny n, noted but not acted on). Success means these
+  each real source's minDCF vs all fakes, each fake source and generator vs all reals. Watch list, from R1's
+  `val_testlike` slices: **asvspoof5 reals** (0.501), asvspoof2019_la reals (0.278), **playht** (0.302; 470 fakes in
+  `val_testlike`, held out of train) and **unit_speech** (0.220; 470, held out), plus codec-LM TTS generators (tiny n,
+  noted but not acted on). Success means these
   move, not just the aggregate. Slices guide the *next* run's sampling weights. Checkpoint selection uses the
   aggregate only, to avoid picking the luckiest of many slices.
 - **Early stop:** save `best.pth` when `val_testlike` combined improves by ≥ 0.002. Stop after **4 evals without such
@@ -258,6 +262,6 @@ Weights, caches and scores are never committed (`data/` is gitignored). The best
 | Overfitting `val_testlike` through repeated selection | ≤ 3 runs, a fixed selection metric, headline scored once after the choice is frozen |
 | Loader-bound on the laptop CPU | loader-only throughput in the probe. Fixes: more workers, or on-disk pre-crops of train clips to 6 s |
 | bitsandbytes / SDPA / checkpointing API differences in transformers 5.17 | each is a probe item with a fallback (fp32 AdamW, eager attention, smaller micro-batch) |
-| GPU shared with other jobs (e.g. G2/G3 extraction) | G5 runs alone. It starts after the current GPU job, and extraction jobs queue behind it or wait for its evals |
+| GPU shared with other jobs (e.g. G2/G3 extraction) | G5 runs alone. GPU queue (coordinator, 2026-09-26): G1 close-out → G5 probe + run 1 → G4 AASIST zero-shot/fine-tune → G5 runs 2/3 → G3/G2 extraction only if time remains |
 | Laptop sleeps / power loss | resumable every 250 steps; keep-awake flag; charger on |
 | Gains don't beat R1 | still valuable for R5 fusion: scores uploaded either way, and slices show where SSL and R1 disagree |
