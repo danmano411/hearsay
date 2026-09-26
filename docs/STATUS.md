@@ -1,6 +1,6 @@
 # HEARSAY — live status
 
-_Updated by the cpu node (coordinator) on every task completion. Last update: 2026-09-26 05:40 EDT._
+_Updated by the cpu node (coordinator) on every task completion. Last update: 2026-09-26 05:50 EDT._
 
 ## ⚠ Needs the owner (on the GPU laptop)
 
@@ -18,6 +18,10 @@ Headline = combined minDCF on `test_internal_testlike` (9,747 clips, 70/30, froz
 | 1 | R1_lgbm_all_full (LightGBM, 228 spectral + bio feats, full train set) | **0.253** | 0.228 | ✅ |
 | 2 | R1_lgbm_all (same, 30k-fake subset) | 0.305 | 0.282 | ✅ |
 
+In progress (validation only, headline pending): **R4ft run 1** (XLS-R-300M, K12) at step 300, back end only, front end
+still frozen: `val_testlike` **0.193** (R1: 0.228). Slices vs R1: asvspoof5 reals 0.380 (0.501), asvspoof2019_la reals
+0.116 (0.278), playht 0.193 (0.302), unit_speech 0.218 (0.220).
+
 Target (stopping criterion): ≤ 0.05, or 3 consecutive rungs improving < 0.005.
 
 ## Nodes
@@ -34,6 +38,8 @@ all-defaults submission bug (#24), a listener that could die on a hub restart (#
 
 ## Log
 
+- 05:47 R4ft run 1 step 300 (frozen XLS-R + trained back end): val_testlike 0.193, already below R1 (0.228).
+- 05:45 VRAM probe: XLS-R-300M K12 fits in 8 GB at 4.9 GiB allocated, 35 clips/s. Run 1 started.
 - 05:39 GPU free; G5 VRAM probe started on CUDA.
 - 05:35 G5 end-to-end fine-tune code merged (#34) after two review rounds (resume/early-stop parity, OOM-safe eval, frozen config.json). README + committed frozen eval subsets (#30).
 - 04:45 #27 fusion, #28 error analysis, #29 G5 plan, #31 AASIST DataLoader merged after cross-review. GPU queue reordered: G5 first.
