@@ -32,13 +32,17 @@ def main():
         print(f"WARNING: dropping {dups.sum()} rows with a path listed twice")
         df = df[~dups]
     df = assign_splits(df.sort_values("path", ignore_index=True))
-    if FROZEN.exists():
-        # Eval subsets are frozen so scores stay comparable across the leaderboard: sampling them afresh lets new
-        # sources displace existing rows. Rows added after the freeze are never in them.
-        fz = pd.read_parquet(FROZEN).set_index("path")
-        for c in ("val_testlike", "test_internal_testlike"):
-            df[c] = df["path"].map(fz[c]).fillna(False).astype(bool)
-        print(f"eval subsets frozen from {FROZEN.name} ({len(fz)} rows)")
+    if not FROZEN.exists():
+        raise SystemExit(f"{FROZEN} missing: refusing to re-sample the eval subsets (it would change the leaderboard "
+                         f"sets). Get it from the cpu node; only the cpu node runs make_splits.")
+    # Eval subsets are frozen so scores stay comparable across the leaderboard: sampling them afresh lets new
+    # sources displace existing rows. Rows added after the freeze are never in them.
+    fz = pd.read_parquet(FROZEN).set_index("path")
+    lost = ~fz.index.isin(df["path"])
+    assert not lost.any(), f"{lost.sum()} frozen eval paths are no longer in any source manifest"
+    for c in ("val_testlike", "test_internal_testlike"):
+        df[c] = df["path"].map(fz[c]).fillna(False).astype(bool)
+    print(f"eval subsets frozen from {FROZEN.name} ({len(fz)} rows)")
     df.to_parquet(OUT, index=False)
 
     print(f"\n{OUT}: {len(df)} rows")

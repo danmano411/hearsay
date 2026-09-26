@@ -133,9 +133,17 @@ def cmd_get(a):
 
 
 def cmd_pull(a):
-    """Download every file under a hub dir that is missing locally or has a different size."""
-    items = jcall("GET", f"/files/{a.dir.rstrip('/')}/?list")
-    todo = [it for it in items if not (ROOT / it["path"]).exists() or (ROOT / it["path"]).stat().st_size != it["bytes"]]
+    """Download every file under a hub dir that is missing locally or differs (size; with --sha also sha256)."""
+    d = a.dir.strip("/")
+    items = jcall("GET", f"/files/{d}/?list" + ("&sha" if a.sha else ""))
+    for it in items:  # never trust server paths: must stay under the requested dir
+        if not it["path"].startswith(d + "/") or ".." in it["path"].split("/"):
+            sys.exit(f"refusing server path {it['path']!r}")
+
+    def stale(it):
+        p = ROOT / it["path"]
+        return not p.exists() or p.stat().st_size != it["bytes"] or (a.sha and sha(p) != it["sha256"])
+    todo = [it for it in items if stale(it)]
     print(f"{len(todo)} of {len(items)} files to fetch", flush=True)
     for it in todo:
         cmd_get(argparse.Namespace(remote=it["path"], local=None))
@@ -161,7 +169,7 @@ def main():
     s = sp.add_parser("put"); s.add_argument("local"); s.add_argument("remote", nargs="?")
     s = sp.add_parser("get"); s.add_argument("remote"); s.add_argument("local", nargs="?")
     s = sp.add_parser("ls"); s.add_argument("dir")
-    s = sp.add_parser("pull"); s.add_argument("dir")
+    s = sp.add_parser("pull"); s.add_argument("dir"); s.add_argument("--sha", action="store_true", help="also compare sha256")
     sp.add_parser("status")
     a = ap.parse_args()
     globals()[f"cmd_{a.cmd}"](a)

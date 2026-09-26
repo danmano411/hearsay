@@ -59,6 +59,11 @@ def test_messages_files_and_guards(hub):
     assert "1 of 1 files to fetch" in ctl(env2, "pull", "data/scores")
     assert (other / "data/scores/x.parquet").read_bytes() == src.read_bytes()
     assert "0 of 1 files to fetch" in ctl(env2, "pull", "data/scores")
+    (other / "data/scores/x.parquet").write_bytes(os.urandom(3_000_000))  # same size, different bytes
+    assert "0 of 1 files to fetch" in ctl(env2, "pull", "data/scores")  # size-only check misses it
+    assert "1 of 1 files to fetch" in ctl(env2, "pull", "data/scores", "--sha")  # --sha catches it
+    (root / "data/scores/y.parquet.partdead").write_bytes(b"in flight")
+    assert "y.parquet.part" not in ctl(env, "ls", "data/scores")  # in-flight uploads are not listed
 
     r = subprocess.run([sys.executable, str(TOOLS / "hubctl.py"), "put", str(src), "src/evil.py"], env=env,
                        capture_output=True, text=True)
