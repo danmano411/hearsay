@@ -6,7 +6,7 @@
 - held-out generators never in train; test-like subsets are ~70/30
 Prints class counts per split / generator.
 
-  python scripts/check_manifest.py [--workers 8] [--skip-audio]
+  python scripts/check_manifest.py [--workers 8] [--skip-audio] [--sources diffssd lj_real]
 """
 import argparse
 from multiprocessing import Pool
@@ -34,9 +34,12 @@ def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("--workers", type=int, default=8)
     ap.add_argument("--skip-audio", action="store_true", help="skip opening every file (fast schema-only check)")
+    ap.add_argument("--sources", nargs="*", help="only check these sources (default: all)")
     args = ap.parse_args()
 
     df = pd.read_parquet(PROCESSED / "manifest.parquet")
+    if args.sources:
+        df = df[df["source"].isin(args.sources)]
     assert df["label"].isin(["bonafide", "spoof"]).all(), "bad label"
     assert not df["path"].duplicated().any(), "duplicate paths"
     assert (df["duration"] >= MIN_DURATION).all(), "manifest duration < 3 s"
@@ -51,13 +54,15 @@ def main():
     for s in ("val", "test_internal"):
         t = df[df[f"{s}_testlike"]]
         assert (df.loc[t.index, "split"] == s).all()
-        if len(t):
+        if len(t) and not args.sources:  # ratio is defined over all sources
             frac = (t["label"] == "spoof").mean()
             assert abs(frac - 0.3) < 0.05, f"{s}_testlike spoof fraction {frac:.2f}"
 
     if not args.skip_audio:
         with Pool(args.workers) as pool:
             bad = [b for b in pool.map(probe, df["path"], chunksize=256) if b]
+        if bad:
+            print(pd.Series([df.set_index("path").loc[p, "source"] for p, _ in bad]).value_counts().to_string())
         assert not bad, f"{len(bad)} bad files, e.g. {bad[:5]}"
 
     print(pd.crosstab(df["split"], df["label"], margins=True).to_string(), "\n")

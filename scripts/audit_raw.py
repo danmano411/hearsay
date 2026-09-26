@@ -72,7 +72,7 @@ def main():
     print("### Clips < 3.0 s per generator\n")
     print(md(g.duration.apply(lambda s: int((s < 3.0).sum())).to_frame("n_lt_3s")), "\n")
     print("### hgt_test format check\n")
-    print(f"n={len(test)}; sr={sorted(test.sr.unique())}; channels={sorted(test.channels.unique())}; "
+    print(f"n={len(test)}; sr={sorted(test.sr.unique().tolist())}; channels={sorted(test.channels.unique().tolist())}; "
           f"codec={sorted(test.codec.unique())}; duration min/median/max = "
           f"{test.duration.min():.2f}/{test.duration.median():.2f}/{test.duration.max():.2f} s")
 

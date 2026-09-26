@@ -11,6 +11,10 @@ import pandas as pd
 TRAIN_PCT, VAL_PCT = 80, 10  # remaining 10% -> test_internal
 # Generators DiffSSD's own protocol reserves for test only (train_val_test_splits.csv): never seen in training here.
 HELDOUT_GENERATORS = ("diffgan_tts", "playht", "unit_speech")
+# Multi-speaker corpora whose text_id is a per-file utterance id: group by speaker so a voice (and its recording
+# channel) never appears on both sides of a split. In-the-Wild = real + fake clips of the same 54 public figures;
+# ASVspoof / LibriSeVoc = LibriSpeech/LibriTTS-derived speakers (LibriSeVoc vocodes each real utterance, same speaker).
+SPEAKER_GROUPED_SOURCES = ("in_the_wild", "asvspoof2019_la", "asvspoof5", "librisevoc")
 TESTLIKE_SPOOF_FRAC = 0.30  # HGT test is ~70% real / 30% synthetic
 
 
@@ -20,9 +24,15 @@ def _h(s):
 
 def group_key(df):
     """Leakage unit. text_id (spoken sentence) if known: then no sentence -- and hence no (speaker, text_id)
-    pair -- ever spans two splits, whatever voice or generator spoke it. Otherwise the speaker, otherwise the file."""
-    key = df["text_id"].astype("string")
-    key = key.fillna("spk:" + df["speaker"].astype("string"))
+    pair -- ever spans two splits, whatever voice or generator spoke it. Otherwise the speaker, otherwise the file.
+    Sources in SPEAKER_GROUPED_SOURCES are grouped by speaker instead (their text_ids are per-file)."""
+    text = df["text_id"].astype("string")
+    # LJSpeech utterance ids are global: "LJ001-0001" and "ljspeech:LJ001-0001" are the same sentence
+    lj = text.str.extract(r"(LJ\d{3}-\d{4})", expand=False)
+    text = ("ljspeech:" + lj).fillna(text)
+    spk = "spk:" + df["source"].astype("string") + ":" + df["speaker"].astype("string")
+    key = text.mask(df["source"].isin(SPEAKER_GROUPED_SOURCES) & spk.notna(), spk)
+    key = key.fillna(spk)
     return key.fillna("path:" + df["path"].astype("string")).astype(str)
 
 
