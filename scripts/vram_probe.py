@@ -37,7 +37,8 @@ CONFIGS = {
     "f": {"desc": "K24 all-trainable ckpt mb4 + 8-bit AdamW", "max_blocks": 24, "freeze_blocks": 0, "ckpt": True,
           "mb": 4, "adam8": True},
 }
-BUDGET_FRAC = 0.85
+BUDGET_FRAC = 0.85  # of the capped budget, on peak allocated
+RESERVED_FRAC = 0.95  # of the capped budget, on peak reserved (fragmentation margin)
 
 
 def parse(argv=None):
@@ -260,8 +261,12 @@ def pick(results):
     limit = None
     caps = [r["cap_gb"] for r in results if r.get("cap_gb")]
     if caps:
+        # Budget on *allocated* (what the model needs); reserved also counts caching-allocator slack, which torch frees
+        # and retries before raising OOM. First GPU probe: every config reserved > 85 % of the cap while allocating only
+        # 67 %, so a reserved-based rule picked nothing. Reserved still gets a looser ceiling as a fragmentation margin.
         limit = BUDGET_FRAC * caps[0]
-        ok = [r for r in ok if r["peak_reserved_gb"] is not None and r["peak_reserved_gb"] <= limit]
+        ok = [r for r in ok if r.get("peak_alloc_gb") is not None and r["peak_alloc_gb"] <= limit
+              and r.get("peak_reserved_gb") is not None and r["peak_reserved_gb"] <= RESERVED_FRAC * caps[0]]
     best = max(ok, key=lambda r: r["clips_per_s"]) if ok else None
     return (best["key"] if best else None), limit
 
@@ -279,7 +284,7 @@ def loader_throughput(a):
 
 
 def markdown(results, pick_key, limit, thr):
-    head = ("| cfg | config | trainable M | peak alloc GB | peak reserved GB | s/step | clips/s | OOM | spill | "
+    head = ("| cfg | config | trainable M | peak alloc GiB | peak reserved GiB | s/step | clips/s | OOM | spill | "
             "eval fwd | note |\n|---|---|---|---|---|---|---|---|---|---|---|\n")
 
     def ev(r):
@@ -295,8 +300,9 @@ def markdown(results, pick_key, limit, thr):
         f"{f(r.get('clips_per_s'), '{:.1f}')} | {'yes' if r.get('oom') else 'no'} | "
         f"{'yes' if r.get('spill') else 'no'} | {ev(r)} | {r.get('skipped') or r.get('error') or ''} |\n"
         for r in results)
-    lim = f"{limit:.2f} GB (85 % of the capped budget)" if limit else "n/a (CPU)"
-    tail = f"\nPick: **{pick_key}** (fastest with peak reserved <= {lim}).\n"
+    lim = (f"peak allocated <= {limit:.2f} GiB (85 % of the {limit / BUDGET_FRAC:.2f} GiB cap) and peak reserved <= "
+           f"{limit / BUDGET_FRAC * RESERVED_FRAC:.2f} GiB (95 %)") if limit else "n/a (CPU)"
+    tail = f"\nPick: **{pick_key}** (fastest with {lim}).\n"
     if thr:
         tail += (f"Loader only: {thr['loader']['clips_per_s']:.1f} clips/s ({thr['loader']['workers']} workers). "
                  f"Picked config on the real DataLoader: {f(thr['real'].get('e2e_clips_per_s'), '{:.1f}')} clips/s "
