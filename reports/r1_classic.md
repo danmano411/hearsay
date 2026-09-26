@@ -85,6 +85,27 @@ all reals. Higher numbers mean that slice is harder. Full per-generator tables a
 | held-out gen | unit_speech | 490 | 0.548 | 0.908 | 0.304 | 0.804 | 0.322 |
 | held-out gen | playht | 489 | 0.503 | 0.946 | 0.490 | 0.880 | **0.451** |
 
+## Update: full training set (C3, 2026-09-26)
+
+The first run capped training at all reals + 30k fakes. C3 featurized every train row (135,436 clips, 43,865 real,
+now including the 3,916 finished sim fakes) and retrained with `--suffix _full` so the earlier rows stay comparable.
+Eval subsets are the frozen ones (`docs/dataset.md`), so the numbers below are directly comparable.
+
+| model | val_testlike combined | **test_internal_testlike** official / brief / **combined** |
+|---|---|---|
+| R1_lgbm_all (30k fakes) | 0.282 | 0.293 / 0.316 / **0.305** |
+| **R1_lgbm_all_full** | **0.228** | 0.262 / 0.243 / **0.253** |
+| R1_lgbm_spec_full | 0.282 | 0.291 / 0.279 / 0.285 |
+| R1_lgbm_bio_full | 0.585 | 0.638 / 0.561 / 0.600 |
+| R1_logreg_all_full | 0.503 | 0.561 / 0.502 / 0.532 |
+| R0_prep_lgbm_full (trivial cues after prep) | 0.933 | 0.915 / 0.928 / 0.921 |
+
+- 3x more fakes cut headline minDCF by 0.05 (17% relative): classic features were data-limited, not saturated.
+- Bio features alone improved most (0.713 → 0.600), and still add ~0.03 on top of spectral features.
+- R0 after `prep()` stays near chance (0.92), so the shortcut neutralization holds with the new sim data.
+- HGT scored with `R1_lgbm_all_full` → `data/scores/R1_lgbm_all_full__hgt.parquet` (new best classic model).
+- Figure: `docs/figures/r1_summary_full.png`.
+
 ## What it teaches us
 
 1. **The raw data leaks, and `prep()` removes almost all of it.** The 9 trivial cues get LightGBM to 0.57 on raw

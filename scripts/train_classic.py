@@ -80,7 +80,11 @@ def fit_sk(make, tr, ev, feats, grid, score_fn):
     return best
 
 
+SUF = ""  # --suffix: distinguishes reruns (e.g. "_full") so earlier leaderboard rows/score files stay intact
+
+
 def emit(name, ev, s, notes, results):
+    name += SUF
     res = report(name, pd.DataFrame({"path": ev.path.values, "score": s}), notes=notes)
     results[name] = res.set_index("set")
     per_source(pd.DataFrame({"path": ev.path.values, "score": s})).to_csv(OUT / f"{name}_per_source.csv", index=False)
@@ -91,7 +95,10 @@ def main():
     ap.add_argument("--threads", type=int, default=4)
     ap.add_argument("--no-svm", action="store_true")
     ap.add_argument("--features", default=str(FEAT / "classic.parquet"))
+    ap.add_argument("--suffix", default="", help="appended to every model name and output file")
     args = ap.parse_args()
+    global SUF
+    SUF = args.suffix
     OUT.mkdir(parents=True, exist_ok=True)
 
     m = manifest()
@@ -156,7 +163,7 @@ def main():
     imp["family"] = imp.feature.map(family)
     imp["gain"] /= imp.gain.sum()
     imp = imp.sort_values("mean_abs_shap", ascending=False)
-    imp.to_csv(OUT / "R1_lgbm_all_importance.csv", index=False)
+    imp.to_csv(OUT / f"R1_lgbm_all{SUF}_importance.csv", index=False)
     print("\nfamily share of mean|SHAP|:\n", (imp.groupby("family").mean_abs_shap.sum() / imp.mean_abs_shap.sum())
           .sort_values(ascending=False).round(3).to_string())
     print("\ntop 25:\n", imp.head(25).round(4).to_string(index=False))
@@ -166,10 +173,11 @@ def main():
     # ---- summary + HGT inference with the best R1 model (by val_testlike combined)
     summ = pd.DataFrame({n: {f"{s}_{k}": r.loc[s, k] for s in r.index for k in ("official", "brief", "combined")}
                          for n, r in results.items()}).T
-    summ.to_csv(OUT / "summary.csv")
+    summ.to_csv(OUT / f"summary{SUF}.csv")
     print("\n", summ.round(4).to_string())
     best = min(models, key=lambda k: models[k][0])
     _, mdl, feats = models[best]
+    best += SUF
     print(f"\nbest R1 by val_testlike combined: {best}")
     h = pd.read_parquet(FEAT / "classic_hgt.parquet")
     assert (h.err == "").all(), h[h.err != ""].head()
@@ -203,8 +211,8 @@ def figure(results, imp):
              fontsize=7, loc="lower right")
     fig.tight_layout()
     FIG.mkdir(parents=True, exist_ok=True)
-    fig.savefig(FIG / "r1_summary.png", dpi=90)
-    print(f"figure -> {FIG / 'r1_summary.png'}")
+    fig.savefig(FIG / f"r1_summary{SUF}.png", dpi=90)
+    print(f"figure -> {FIG / f'r1_summary{SUF}.png'}")
 
 
 if __name__ == "__main__":
