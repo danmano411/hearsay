@@ -109,8 +109,10 @@ class H(BaseHTTPRequestHandler):
             if "list" in q:
                 if not p.is_dir():
                     return self._json(404, {"error": "no such dir"})
-                items = [{"path": x.relative_to(ROOT).as_posix(), "bytes": x.stat().st_size}
-                         for x in sorted(p.rglob("*")) if x.is_file()]
+                # in-flight uploads (*.part<hex>) are never listed; ?sha adds sha256 per file (costs a full read)
+                items = [{"path": x.relative_to(ROOT).as_posix(), "bytes": x.stat().st_size,
+                          **({"sha256": sha256(x)} if "sha" in q else {})}
+                         for x in sorted(p.rglob("*")) if x.is_file() and ".part" not in x.name]
                 return self._json(200, items)
             if not p.is_file():
                 return self._json(404, {"error": "no such file"})
