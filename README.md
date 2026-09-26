@@ -7,17 +7,18 @@ synthetic)**. The metric is the organizers' ASVspoof 5 Track-1 **minDCF** (lower
 
 ## Where we are
 
-Headline = combined minDCF on `test_internal_testlike`: 9,747 held-out clips at the test's ~70/30 real/fake mix, heavy
-on generators never seen in training. It is frozen, and nothing is ever tuned on it.
+Headline = combined minDCF on `test_internal_testlike`: 9,747 held-out clips at the test's ~70/30 real/fake mix. About
+half its fakes (1,434 of 2,924) come from three generators held out of training entirely. It is frozen, and nothing is
+ever tuned on it.
 
 | model | what it is | headline |
 |---|---|---|
-| R0 after `prep()` | trivial cues only (duration, silence, level, bandwidth) | 0.921: shortcut neutralized |
+| R0 raw → after `prep()` | LightGBM on 9 trivial cues (duration, silence, level, bandwidth) | 0.542 → 0.921 |
 | R1 | LightGBM on 228 spectral + speech-biology features, full train set | **0.253** |
-| R4ft (running) | XLS-R-300M fine-tuned end to end on GPU, AASIST-style back end ([plan](plans/08_ssl_aasist.md)) | — |
-| R5 | fusion of the above ([`scripts/fuse.py`](scripts/fuse.py)) | — |
+| R5 (smoke) | LR fusion of R1's spectral-only and biology-only models ([`scripts/fuse.py`](scripts/fuse.py)) | 0.260 |
+| R4ft (planned, next on GPU) | XLS-R-300M fine-tuned end to end, AASIST-style back end ([plan](plans/08_ssl_aasist.md)) | — |
 
-## The approach in one picture
+## The approach in one picture (planned pipeline; see the table above for what has run)
 
 ```mermaid
 flowchart LR
@@ -42,16 +43,18 @@ flowchart LR
 
 ## What we learned (the short version)
 
-1. **The given data has a trap.** The organizers' 242 real clips keep energy up to 8 kHz; every properly resampled clip,
-   real or fake, does not. A depth-3 tree on trivial cues separated the given data *perfectly*. We low-pass every clip
-   at 7 kHz, and the cue drops to chance (R0: 0.92). See [`reports/data_audit.md`](reports/data_audit.md).
+1. **The given data has a trap.** On the given data alone, a depth-3 tree on trivial cues (bandwidth, silence, level)
+   separated real from fake *perfectly*. One cue is the organizers' 242 real clips keeping energy up to 8 kHz, which
+   properly resampled clips lack. `prep()` (DC removal, silence trim, 7 kHz low-pass, RMS normalization) plus 0–7 kHz
+   features neutralize these cues: a trivial-cue LightGBM goes from 0.54 on raw audio to 0.92 (near chance) after
+   `prep()`. See [`reports/data_audit.md`](reports/data_audit.md).
 2. **One real speaker is not "real speech".** 242 clips of one voice against 70,000 diverse fakes teaches "LJ = real".
-   We added 57k real clips from 11 corpora (including the LibriSpeech speakers DiffSSD clones) and LJ-voice fakes.
+   We added 57k real clips from 10 corpora (including the LibriSpeech speakers DiffSSD clones) and LJ-voice fakes.
    See [`docs/external_data.md`](docs/external_data.md).
 3. **Biology helps, modestly.** 48 physiology-motivated features (jitter, shimmer, HNR, formant dynamics, micro-prosody)
    are weak alone but add to spectral features. See [`docs/speech_biology.md`](docs/speech_biology.md).
-4. **Unseen generators are the real test.** Errors concentrate on held-out generators (PlayHT, UnitSpeech) and on real
-   corpora with unusual recording chains. See [`reports/error_analysis.md`](reports/error_analysis.md).
+4. **Unseen generators are the real test.** Errors concentrate on two of the three held-out generators (PlayHT,
+   UnitSpeech; the third, DiffGAN-TTS, is easy) and on real corpora with unusual recording chains (ASVspoof 5 reals). See [`reports/error_analysis.md`](reports/error_analysis.md).
 5. **The scorer disagrees with the brief** about which error costs 4×. We report both readings everywhere. See
    [`docs/scoring.md`](docs/scoring.md).
 
@@ -79,14 +82,34 @@ weight derived from the headline set.
 
 ## Reproduce
 
+Windows PowerShell, from the repo root (Python 3.12):
 ```
-py -3.12 -m venv .venv && .venv\Scripts\pip install -r requirements.txt     # GPU: install a CUDA torch build first
-set HEARSAY_ROOT=<this folder>
+py -3.12 -m venv .venv
+.venv\Scripts\pip install -r requirements.txt   # pins CPU torch via the PyTorch index in the file
+$env:HEARSAY_ROOT = (Get-Location).Path          # the code's default root is the author's laptop path (src/hearsay/audio.py)
+$env:PYTHONPATH = "src"
 ```
+GPU machines: install a CUDA torch build first (we used `torch 2.14.0+cu130` from https://download.pytorch.org/whl/cu130),
+then install requirements.txt **without** its two torch lines, or pip swaps the CPU build back in.
+
 Put the challenge data under `data/raw/` (`diffssd/`, `lj_real/`, `hgt_test/`) and the organizers' `asvspoof5` repo
-under `third_party/`. Then run `scripts/clean_given.py` → `scripts/ingest_*.py` → `scripts/run_sim.py` →
-`scripts/make_splits.py` → a rung's `extract_*` / `train_*` script → `scripts/fuse.py` →
-`scripts/make_submission.py`. Tests: `python -m pytest -q tests`.
+under `third_party/`. Rebuild the dataset:
+```
+python scripts/clean_given.py                     # DiffSSD + LJ -> 16 kHz canonical clips + manifests
+python scripts/ingest_ljspeech.py                 # and ingest_librispeech.py, ingest_wavefake.py, ingest_hf_sasb.py,
+                                                  #     ingest_mlaad_tiny.py (docs/external_data.md, section 5)
+python scripts/run_sim.py                         # own TTS sim
+python scripts/make_splits.py                     # needs data/processed/eval_subsets_frozen.parquet (docs/dataset.md)
+```
+The current best (R1) and its submission:
+```
+python scripts/extract_classic.py --workers 10 --n-fake 200000   # spectral + biology features, every train row
+python scripts/extract_classic.py --hgt --workers 10              # the 1,671 test clips (inference only)
+python scripts/train_classic.py --suffix _full --no-svm           # -> R1_lgbm_all_full (+ __hgt scores)
+python scripts/make_submission.py --model R1_lgbm_all_full --team <team>
+python scripts/score.py validate submission/<team>_scores.tsv
+python -m pytest -q tests
+```
 
 ```
 plans/  docs/  reports/   written record (plans first, then docs and results)
@@ -95,3 +118,17 @@ scripts/                  reproducible CLIs
 tools/                    two-node hub + client
 data/, third_party/       gitignored (audio, features, scores, weights; organizers' scorer)
 ```
+
+## Credits and licenses
+
+- **Organizers' scorer and baselines:** [asvspoof-challenge/asvspoof5](https://github.com/asvspoof-challenge/asvspoof5)
+  (evaluation package, Baseline-AASIST by Tak & Jung, NAVER + EURECOM, MIT). Imported in place from `third_party/`,
+  never copied or modified.
+- **Data:** DiffSSD (Purdue; CC BY-NC-ND 4.0), LJSpeech (public domain), LibriSpeech (CC BY 4.0), WaveFake,
+  LibriSeVoc and In-the-Wild (CC BY-SA 4.0), ASVspoof 2019 LA / ASVspoof 5 (ODC-By 1.0), CVoiceFake (CC BY 4.0), DFADD
+  (MIT), **SONAR and MLAAD-tiny (CC BY-NC 4.0)**. Per-clip licenses are in the manifest; details in
+  [`docs/external_data.md`](docs/external_data.md). Because DiffSSD, SONAR and MLAAD-tiny are non-commercial, **models
+  trained here are for non-commercial use only**. This repo redistributes no audio.
+- **Pretrained models:** microsoft/wavlm-base-plus, facebook/wav2vec2-xls-r-300m, and for the sim
+  kakao-enterprise/vits-ljs (MIT), facebook/mms-tts-eng (CC BY-NC 4.0), microsoft/speecht5_tts + speecht5_hifigan (MIT).
+- **Code license:** none chosen yet (owner's decision); the repository is private.
