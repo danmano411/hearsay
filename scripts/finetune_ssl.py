@@ -48,6 +48,8 @@ from hearsay.models import ssl_e2e
 from hearsay.models.ssl_e2e_data import BalancedBatches, TrainSet, center_cache, eval_loader, parse_up, train_loader
 
 HGT_DIR = DATA / "raw" / "hgt_test"
+TEMPLATE_NAME = "HGT_Hearsay_score_template.csv"  # scripts/score.py TEMPLATE
+N_HGT = 1671
 OUT = DATA / "models" / "r4ft_xlsr"
 # args that define the model/optimizer layout: a resume or a score with different values would be silently wrong
 ARCH = ("model", "backend", "max_blocks", "freeze_blocks", "micro_batch", "accum")
@@ -91,7 +93,7 @@ def parse(argv=None):
                    help="cell up-weight source:label=w (repeatable; default asvspoof5:bonafide=2)")
     p.add_argument("--power", type=float, default=0.5, help="cell/generator weight = n^power")
     p.add_argument("--val-n", type=int, default=0, help="subsample val_testlike (0 = all 8,963; smoke tests only)")
-    p.add_argument("--eval-batch", type=int, default=32)
+    p.add_argument("--eval-batch", type=int, default=32, help="4 s windows per eval forward (halved on OOM)")
     p.add_argument("--workers", type=int, default=6, help="DataLoader worker processes (0 = main process)")
     p.add_argument("--prefetch", type=int, default=4)
     p.add_argument("--threads", type=int, default=0, help="torch threads in the main process (0 = torch default)")
@@ -102,6 +104,8 @@ def parse(argv=None):
     p.add_argument("--windows", default="auto", choices=["auto", "center", "win3"],
                    help="score: inference windows (auto = choose on val_testlike)")
     p.add_argument("--hgt", action="store_true", help="score: also score HGT test audio (inference only)")
+    p.add_argument("--force", action="store_true",
+                   help="score: overwrite an existing config.json with another checkpoint/inference mode (recorded)")
     p.add_argument("--heartbeat", action="store_true", help="after each eval: hubctl.py job --me gpu <progress>")
     device.add_argument(p)
     a, rest = p.parse_known_args(argv)
@@ -219,18 +223,37 @@ def log_line(path, rec):
 
 
 @torch.no_grad()
-def logits_of(model, x_iter, dev, a):
+def forward_windows(model, x, dev, a, log=print):
+    """Logits of an (n, 64000) window array in chunks of a.eval_batch WINDOWS (not clips). On a CUDA OOM: empty the
+    cache, halve a.eval_batch (kept for later calls), log it and retry the same chunk; re-raises at batch 1."""
+    out, i = [], 0
+    while i < len(x):
+        chunk = x[i:i + a.eval_batch]
+        try:
+            with autocast(dev, a):
+                o = model(torch.from_numpy(np.array(chunk, np.float32)).to(dev)).float().cpu()
+        except torch.OutOfMemoryError:
+            if a.eval_batch <= 1:
+                raise
+            if dev.type == "cuda":
+                torch.cuda.empty_cache()
+            a.eval_batch = max(1, a.eval_batch // 2)
+            log(f"eval OOM: eval batch halved to {a.eval_batch} windows")
+            continue
+        out.append(o)
+        i += len(chunk)
+    return torch.cat(out).numpy().astype(np.float64) if out else np.zeros(0)
+
+
+def logits_of(model, x, dev, a, log=print):
     was = model.training
     model.eval()
-    out = []
     # HF's encoder draws torch.rand([]) per layer (layerdrop) even in eval mode: fork the RNG so an eval does not
     # shift the training stream (a run is then the same whether or not/when it evaluated or resumed)
     with torch.random.fork_rng(devices=[dev] if dev.type == "cuda" else []):
-        for x in x_iter:
-            with autocast(dev, a):
-                out.append(model(torch.from_numpy(np.array(x, np.float32)).to(dev)).float().cpu())
+        s = forward_windows(model, x, dev, a, log)
     model.train(was)
-    return torch.cat(out).numpy().astype(np.float64)
+    return s
 
 
 def val_testlike(m, a):
@@ -254,6 +277,7 @@ def train(a):
 
     m = manifest()
     tr = m[m.split == "train"].reset_index(drop=True)
+    train_sha1 = hashlib.sha1("\n".join(tr.path).encode()).hexdigest()
     vt = val_testlike(m, a)
     val_y = vt.label.to_numpy()
     val_x = center_cache(vt.path.tolist(), ROOT, Path(a.out) / "cache", workers=a.workers)
@@ -269,17 +293,22 @@ def train(a):
     print(f"front end {a.model} K={model.frontend.n_blocks} attn={model.frontend.attn} frozen-lowest="
           f"{a.freeze_blocks} ckpt={not a.no_ckpt}; trainable {sum(p.numel() for p in params) / 1e6:.1f} M", flush=True)
     state = {"step": 0, "clips": 0, "best": None, "bad": 0, "lr_scale": 1.0, "retries": 0, "evals": 0,
-             "stop": None}
+             "stop": None, "since_eval": []}  # since_eval: train losses since the last eval (survives a pause)
 
     def save_last():
         atomic_save({"model": model.state_dict(), "opt": opt.state_dict(), "state": dict(state),
                      "sched": {"step": state["step"], "lr_scale": state["lr_scale"]},
-                     "sampler": sampler_state(), "rng": rng_state(), "args": arch(a)}, LAST)
+                     "sampler": sampler_state(), "rng": rng_state(), "args": arch(a), "train_sha1": train_sha1},
+                    LAST)
 
     def load_last():
         ck = torch.load(LAST, map_location="cpu", weights_only=False)
         if ck["args"] != arch(a):
             raise SystemExit(f"{LAST} was trained with {ck['args']}, not {arch(a)}: use another --name")
+        if ck.get("train_sha1") != train_sha1:
+            raise SystemExit(f"{LAST} was trained on a different train split (train-path sha1 {ck.get('train_sha1')} "
+                             f"!= {train_sha1}): the manifest changed (SYNC?) between legs. Sampler row indices would "
+                             f"point at other clips, so refusing to resume; start a new --name.")
         model.load_state_dict(ck["model"])
         opt.load_state_dict(ck["opt"])
         state.update(ck["state"])
@@ -308,9 +337,13 @@ def train(a):
         sampler.start = state["step"] * a.accum  # a resume mid-accumulation restarts that group
         return iter(train_loader(ds, sampler, a.workers, pin, a.prefetch))
 
+    def oom_log(msg):
+        print(msg, flush=True)
+        log_line(LOG, {"type": "oom", "step": state["step"], "where": "eval", "eval_batch": a.eval_batch})
+
     def do_eval(train_loss):
         t = time.time()
-        s = logits_of(model, (val_x[i:i + a.eval_batch] for i in range(0, len(val_x), a.eval_batch)), dev, a)
+        s = logits_of(model, val_x, dev, a, log=oom_log)
         r = metrics_for(s, val_y)
         state["evals"] += 1
         better = state["best"] is None or r["combined"] <= state["best"] - a.min_delta
@@ -352,7 +385,7 @@ def train(a):
 
     total = a.max_epochs * a.epoch_steps
     t0 = time.time()
-    losses, since_eval, step_times = [], [], []
+    losses, step_times = [], []
     it = batches()
     last_eval_step = None
     with keep_awake():
@@ -400,7 +433,7 @@ def train(a):
             state["clips"] += a.micro_batch * a.accum
             t_win[1] += a.micro_batch * a.accum
             losses.append(tot)
-            since_eval.append(tot)
+            state["since_eval"].append(tot)
             if dev.type == "cuda":
                 torch.cuda.synchronize(dev)
             dt = time.time() - ts
@@ -416,14 +449,17 @@ def train(a):
                 print(f"step {s} loss {rec['loss']:.4f} {dt:.2f} s/step{' SPILL?' if spill else ''} "
                       f"{(time.time() - t0) / 60:.1f} min", flush=True)
             if (a.warmup_backend and s == a.warmup_backend) or s % a.eval_every == 0:
-                do_eval(float(np.mean(since_eval)))
-                since_eval, last_eval_step = [], s
+                do_eval(float(np.mean(state["since_eval"])))
+                state["since_eval"], last_eval_step = [], s
             elif s % a.save_every == 0:
                 save_last()
-        if losses and last_eval_step != state["step"] and not (state["stop"] or "").startswith("non-finite"):
-            do_eval(float(np.mean(since_eval)) if since_eval else None)  # budget ran out between evals
-        elif state["stop"] and not state["stop"].startswith("non-finite"):
-            save_last()  # persist the stop reason
+        stop = state["stop"] or ""
+        if stop.startswith("budget") and losses and last_eval_step != state["step"]:
+            do_eval(float(np.mean(state["since_eval"])) if state["since_eval"] else None)  # final scheduled eval
+        elif not stop.startswith("non-finite"):
+            # a pause (--max-steps/--hours) or early stop only saves: an unscheduled eval would move best.pth and the
+            # patience counter, so a paused + resumed run would stop differently from an uninterrupted one
+            save_last()
     print(f"done at step {state['step']}: {state['stop'] or 'paused (resume with the same command)'}; "
           f"best val_testlike combined {state['best']}", flush=True)
     return state
@@ -434,6 +470,15 @@ def arch(a):
 
 
 # ---------------------------------------------------------------------------------------------------------------- #
+
+def template_names():
+    """Filenames of the organizers' score template (same parsing as scripts/make_submission.py: tab-separated,
+    header 'filename<TAB>cm-score'), located like scripts/score.py (HGT_DIR / HGT_Hearsay_score_template.csv)."""
+    t = HGT_DIR / TEMPLATE_NAME
+    if not t.exists():
+        raise SystemExit(f"score template {t} missing")
+    return [ln.split("\t")[0] for ln in t.read_text().rstrip("\n").split("\n")[1:]]
+
 
 def hgt_paths():
     """HGT test audio (inference only). Only called after config.json is written."""
@@ -454,10 +499,10 @@ def score_paths(model, paths, max_windows, dev, a, cache_csv=None):
         model.eval()
         t0 = time.time()
         with torch.no_grad():
-            for n, (x, ids, k) in enumerate(eval_loader(todo, ROOT, max_windows, a.eval_batch, a.workers,
+            clips = max(1, a.eval_batch // max_windows)  # <= eval_batch windows per loader batch
+            for n, (x, ids, k) in enumerate(eval_loader(todo, ROOT, max_windows, clips, a.workers,
                                                          dev.type == "cuda")):
-                with autocast(dev, a):
-                    s = model(x.to(dev)).float().cpu().numpy().astype(np.float64)
+                s = forward_windows(model, x.numpy(), dev, a)
                 bounds = np.cumsum([0] + k.tolist())
                 for i, lo, hi in zip(ids.tolist(), bounds[:-1], bounds[1:]):
                     done[todo[i]] = float(s[lo:hi].mean())
@@ -466,7 +511,7 @@ def score_paths(model, paths, max_windows, dev, a, cache_csv=None):
                 if f:
                     f.flush()
                 if n % 50 == 0:
-                    print(f"  scored {min((n + 1) * a.eval_batch, len(todo))}/{len(todo)} "
+                    print(f"  scored {min((n + 1) * clips, len(todo))}/{len(todo)} "
                           f"({(time.time() - t0) / 60:.1f} min)", flush=True)
         if f:
             f.close()
@@ -504,15 +549,26 @@ def score(a):
         vt_res[mode] = metrics_for(vt_scores[mode], vt.label)
         print(f"val_testlike {mode}: {vt_res[mode]}", flush=True)
     mode = min(vt_res, key=lambda md: (vt_res[md]["combined"], md != "center"))  # tie -> centre (cheaper)
+    manual = a.windows != "auto"
+    cfg_path = run / "config.json"
+    if cfg_path.exists():
+        old = json.loads(cfg_path.read_text())
+        if (old.get("sha256"), old.get("inference")) != (digest, mode) and not a.force:
+            raise SystemExit(f"{cfg_path} already fixes checkpoint {str(old.get('sha256'))[:16]}... / "
+                             f"{old.get('inference')}; this run would be {digest[:16]}... / {mode}. The headline is "
+                             f"scored once after the choice is frozen: refusing to overwrite (pass --force to override, "
+                             f"it is recorded).")
     probe = Path(a.out) / "probe.json"
     config = {"name": a.name, "checkpoint": str(best), "sha256": digest, "inference": mode,
-              "max_windows": modes[mode], "val_testlike": vt_res, "selected_on": "val_testlike combined minDCF",
+              "max_windows": modes[mode], "val_testlike": vt_res,
+              "selected_on": "manual (--windows)" if manual else "val_testlike combined minDCF",
+              "forced": manual, "overwrite_forced": bool(a.force and cfg_path.exists()),
               "arch": arch(a), "args": saved,
               "probe_pick": json.loads(probe.read_text()).get("pick") if probe.exists() else None,
               "written": time.strftime("%Y-%m-%d %H:%M:%S")}
     tmp = run / "config.json.tmp"
     tmp.write_text(json.dumps(config, indent=1, default=str))
-    os.replace(tmp, run / "config.json")
+    os.replace(tmp, cfg_path)
     print(f"config.json written: {mode} ({modes[mode]} window(s)), sha256 {digest[:16]}...", flush=True)
 
     # 2) the rest of val + test_internal_testlike, with the frozen choice
@@ -521,7 +577,8 @@ def score(a):
     s_rest = score_paths(model, rest.path.tolist(), modes[mode], dev, a, cache / f"rest_{mode}_{tag}.csv")
     df = pd.DataFrame({"path": list(vt.path) + list(rest.path),
                        "score": np.concatenate([vt_scores[mode], s_rest])})
-    assert np.isfinite(df.score).all()
+    if not np.isfinite(df.score).all():
+        raise SystemExit("non-finite scores on val/test_internal")
     out_dir = Path(a.scores_dir)
     out_dir.mkdir(parents=True, exist_ok=True)
     out = out_dir / f"{a.name}.parquet"
@@ -532,11 +589,19 @@ def score(a):
 
     # 3) HGT: inference only, frozen checkpoint + frozen window choice, after config.json exists
     if a.hgt:
-        assert (run / "config.json").exists()
+        if not cfg_path.exists():
+            raise SystemExit("config.json must exist before HGT is read")
         paths = hgt_paths()
+        names = [p.rsplit("/", 1)[-1] for p in paths]
+        want = template_names()
+        if len(paths) != N_HGT or len(want) != N_HGT or sorted(names) != sorted(want):
+            raise SystemExit(f"HGT audio ({len(paths)} files) does not match the organizers' template "
+                             f"({len(want)} rows, expected {N_HGT}); missing {sorted(set(want) - set(names))[:3]}, "
+                             f"extra {sorted(set(names) - set(want))[:3]}")
         s = score_paths(model, paths, modes[mode], dev, a, cache / f"hgt_{mode}_{tag}.csv")
-        hg = pd.DataFrame({"filename": [p.rsplit("/", 1)[-1] for p in paths], "score": s})
-        assert len(hg) == len(paths) and np.isfinite(hg.score).all()
+        hg = pd.DataFrame({"filename": names, "score": s})
+        if len(hg) != N_HGT or not np.isfinite(hg.score).all():
+            raise SystemExit("HGT scoring incomplete or non-finite")
         hout = out_dir / f"{a.name}__hgt.parquet"
         hg.to_parquet(hout, index=False)
         print(f"HGT: {len(hg)} clips scored -> {hout}", flush=True)
