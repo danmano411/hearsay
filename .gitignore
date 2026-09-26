@@ -1,6 +1,6 @@
-.venv/
-data/
-third_party/
+/.venv*/
+/data/
+/third_party/
 submission/*.tsv
 *.wav
 *.mp3
@@ -12,3 +12,4 @@ submission/*.tsv
 __pycache__/
 .ipynb_checkpoints/
 .DS_Store
+/.claude/
