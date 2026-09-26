@@ -7,11 +7,13 @@ Adds: group, split (train|val|test_internal|excluded), logo_fold, val_testlike, 
 """
 import pandas as pd
 
-from hearsay.audio import MANIFEST_COLUMNS, MANIFESTS, PROCESSED
+from hearsay.audio import MANIFEST_COLUMNS, MANIFESTS, PROCESSED, ROOT
 from hearsay.data.splits import assign_splits
 
 OUT = PROCESSED / "manifest.parquet"
-FROZEN = PROCESSED / "eval_subsets_frozen.parquet"  # path, val_testlike, test_internal_testlike (see docs/dataset.md)
+# Frozen eval subsets, committed to the repo so a fresh clone rebuilds the exact headline sets (docs/dataset.md).
+# Only rows in either subset are listed; every other row is in neither.
+FROZEN = ROOT / "splits" / "eval_subsets_frozen.csv"
 
 
 def main():
@@ -34,10 +36,10 @@ def main():
     df = assign_splits(df.sort_values("path", ignore_index=True))
     if not FROZEN.exists():
         raise SystemExit(f"{FROZEN} missing: refusing to re-sample the eval subsets (it would change the leaderboard "
-                         f"sets). Get it from the cpu node; only the cpu node runs make_splits.")
+                         f"sets). It is committed to the repo: git checkout splits/.")
     # Eval subsets are frozen so scores stay comparable across the leaderboard: sampling them afresh lets new
     # sources displace existing rows. Rows added after the freeze are never in them.
-    fz = pd.read_parquet(FROZEN).set_index("path")
+    fz = pd.read_csv(FROZEN).set_index("path")
     lost = ~fz.index.isin(df["path"])
     if lost.any():
         raise SystemExit(f"{lost.sum()} frozen eval paths are no longer in any source manifest")
