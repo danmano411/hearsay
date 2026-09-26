@@ -1,6 +1,6 @@
 # HEARSAY — live status
 
-_Updated by the cpu node (coordinator) on every task completion. Last update: 2026-09-26 07:12 EDT._
+_Updated by the cpu node (coordinator) on every task completion. Last update: 2026-09-26 08:40 EDT._
 
 ## ⚠ Needs the owner (on the GPU laptop)
 
@@ -9,21 +9,17 @@ _Updated by the cpu node (coordinator) on every task completion. Last update: 20
 2. *(Optional)* The GPU laptop's permission layer blocks its Claude from merging PRs. Not blocking: the cpu node merges
    GPU PRs after reviewing them, which is what the protocol requires.
 
-## Best so far
+## ✅ Stopping criterion met: submission ready
 
-Headline = combined minDCF on `test_internal_testlike` (9,747 clips, 70/30, frozen; never tuned on). Lower is better.
-
-| rank | model | headline | val_testlike | HGT scored |
+| rank | model | headline | val_testlike | submitted |
 |---|---|---|---|---|
-| 1 | R1_lgbm_all_full (LightGBM, 228 spectral + bio feats, full train set) | **0.253** | 0.228 | ✅ |
-| 2 | R1_lgbm_all (same, 30k-fake subset) | 0.305 | 0.282 | ✅ |
+| 1 | **R4ft_xlsr_light** (XLS-R-300M fine-tuned end to end, GPU) | **0.0282** | 0.0121 | ✅ `submission/hearsay_scores.tsv` |
+| — | R5 fusion R4ft + R1 (not selected by the pre-registered rule) | 0.0218 | 0.0128 (cross-fit) | |
+| 2 | R1_lgbm_all_full (classic + biology features) | 0.253 | 0.228 | |
+| 3 | R3 AASIST zero-shot | 0.823 | 0.831 | |
 
-In progress (validation only, headline pending): **R4ft run 1** (XLS-R-300M fine-tuned, K12) after 6 virtual epochs:
-`val_testlike` **0.0166** (EER 0.48 %; R1: 0.228), already below the 0.05 target *on validation*. Slices (combined):
-playht 0.014 (R1 0.302), unit_speech 0.011 (0.220), asvspoof2019_la reals 0.004 (0.278), asvspoof5 reals 0.073 (0.501).
-The stopping criterion is judged on the headline, scored once after early stopping and a frozen config.json.
-
-Target (stopping criterion): ≤ 0.05, or 3 consecutive rungs improving < 0.005.
+Full write-up: [`reports/final_results.md`](../reports/final_results.md). Team name for the file: still to be set by the
+owner (`make_submission.py --team <name>`).
 
 ## Nodes
 
@@ -39,6 +35,8 @@ all-defaults submission bug (#24), a listener that could die on a hub restart (#
 
 ## Log
 
+- 08:40 Stop criterion met. R4ft headline 0.0282 confirmed with report(); pre-registered rule picks R4ft; submission built (T=8, 1,671 distinct) and validated.
+- 08:22 R4ft run 1 early-stopped (best step 6,144); scored once after config.json froze win3.
 - 07:11 R4ft run 1, 6 epochs: val_testlike 0.0166 (~2 h into its 4 h budget).
 - 06:41 R4ft run 1, 4 epochs: val_testlike 0.0299 (3,072: 0.0354).
 - 06:12 R4ft run 1, 2 epochs: val_testlike 0.0414.
