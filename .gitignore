@@ -1,0 +1,14 @@
+.venv/
+data/
+third_party/
+submission/*.tsv
+*.wav
+*.mp3
+*.flac
+*.pth
+*.pt
+*.npy
+*.parquet
+__pycache__/
+.ipynb_checkpoints/
+.DS_Store
