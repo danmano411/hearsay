@@ -4,13 +4,16 @@ calibrated or selected on benchmark data.
     python scripts/bench_score.py r1   [--sets ...]   # refits R1_lgbm_all_full exactly (once, saved), then scores
     python scripts/bench_score.py r3   [--sets ...]   # organizers' AASIST, zero-shot
     python scripts/bench_score.py r4ft [--sets ...]   # needs data/models/r4ft_xlsr/R4ft_xlsr_light/{best.pth,config.json}
-    python scripts/bench_score.py report              # -> reports/generalization_table.md
+    python scripts/bench_score.py report [--sets ...] # -> data/bench/generalization.csv (+ printed table)
+                                                      # default sets exclude keyguard_*: pass them with --sets
 
 Scores -> data/bench/scores/<model>__<set>.parquet (path, score; higher = more fake). The fusion R5_r4ft_r1 is
 computed in `report` from the frozen weights in data/scores/R5_r4ft_r1.json.
 
 Operating point: minDCF picks its own best threshold per set, which a deployed detector cannot do. So `report` also
 fixes each model's threshold on val_testlike (brief reading: a real flagged as fake costs 4x) and applies it unchanged.
+The val_testlike scores come from the exact objects scored here: the refit R1 booster, the frozen R4ft scores, and
+fused() on those two for R5 (not the 5-fold cross-fitted R5 val scores in data/scores/R5_r4ft_r1.parquet).
 """
 import argparse
 import json
@@ -157,21 +160,38 @@ def op_point(s, y, t):
     return 100 * np.mean(s[~fake] >= t), 100 * np.mean(s[fake] < t)
 
 
-def report(sets):
+def val_scores():
+    """val_testlike scores of the frozen objects used on the benchmarks (R3 only if its scores exist)."""
+    from hearsay.features.bio import FEATURES as BIO
+    from hearsay.features.spectral import FEATURES as SPEC
     m = manifest().set_index("path")
     vt = m[m.val_testlike]
+    f = pd.read_parquet(DATA / "features" / "classic.parquet").query("err == ''").set_index("path")
+    f = f[f.index.isin(vt.index)]
+    v = {"R1_lgbm_all_full": pd.Series(r1_model().predict(f[SPEC + BIO]), index=f.index)}
+    for mdl in ["R3_aasist_zeroshot_prep", "R4ft_xlsr_light"]:
+        p = SCORES / f"{mdl}.parquet"
+        if p.exists():
+            s = pd.read_parquet(p).set_index("path").score
+            v[mdl] = s[s.index.isin(vt.index)]
+    v["R5_r4ft_r1"] = fused(v)
+    return v, vt.label
+
+
+def report(sets):
+    v, lab = val_scores()
+    thr = {mdl: threshold(s.values, lab.reindex(s.index).values) for mdl, s in v.items()}
+    for mdl, s in v.items():
+        print(f"{mdl}: val_testlike n={len(s)} combined {metrics_for(s.values, lab.reindex(s.index).values)['combined']:.4f}"
+              f" threshold {thr[mdl]:.4f}")
     models = ["R1_lgbm_all_full", "R3_aasist_zeroshot_prep", "R4ft_xlsr_light", "R5_r4ft_r1"]
-    thr = {}
-    for mdl in models:
-        v = pd.read_parquet(SCORES / f"{mdl}.parquet").set_index("path").score.reindex(vt.index)
-        thr[mdl] = threshold(v.values, vt.label.values)
     rows = []
     for name in sets:
         b = bench(name).set_index("path")
         fr = {}
         for mdl in models[:3]:
             f = OUT / f"{mdl}__{name}.parquet"
-            if f.exists():
+            if f.exists() and mdl in thr:
                 fr[mdl] = pd.read_parquet(f).set_index("path").score
         if {"R4ft_xlsr_light", "R1_lgbm_all_full"} <= fr.keys():
             fr["R5_r4ft_r1"] = fused(fr)

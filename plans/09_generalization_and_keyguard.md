@@ -34,6 +34,10 @@ the honest "would it work out of the box" number.
 **Honesty rules:** no threshold, calibration or model choice from these sets; one scoring pass per model; per-set
 leakage caveats printed next to the numbers. Output: `reports/generalization.md`.
 
+**As run (2026-09-26):** two items were dropped. R3 (AASIST zero-shot) was skipped for time; `bench_score.py r3`
+exists but was not run, and `report` skips R3 when its scores are missing. ODSS was not ingested: almost all of its
+clips are under 3 s, so the ≥ 3 s filter leaves too few.
+
 ## Part B: Hearsay × Keyguard
 
 Keyguard (teammate's repo, `LordKarV/keyboard-acoustic-shield`) = keystroke eavesdropping through call audio + an

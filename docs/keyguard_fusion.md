@@ -26,11 +26,11 @@ call". The 2024 Hong Kong deepfake video-conference fraud (≈ US$25M) is the do
    (PESQ/STOI, Whisper, a human). Add Hearsay as a fourth: the shield may not make a real voice look synthetic.
    A shield that gets its own user flagged as a deepfake by the other side's detector fails the user, and the
    challenge brief prices that error (a real voice flagged) at 4×. E2 result: Keyguard's DSP shield pushes a classic
-   detector's false alarms from 1 % to 18 %. Our submitted detector barely moves (0.7 % → 1.7 %, within noise). The
+   detector's false alarms from 1 % to 17 %. Our submitted detector barely moves (0.7 % → 1.3 %, within noise). The
    constraint matters because you don't choose the detector on the other end of the call.
 3. **Robustness certificate for Hearsay.** Typing while talking is the most common real-call nuisance. E1 measures
-   Hearsay's false alarms against keystroke noise, using Keyguard's recorded press banks (≈ 5.7k presses, 10
-   keyboard/mic domains). If it hurts, those banks become a training augmentation (not done: no training in this phase).
+   Hearsay's false alarms against keystroke noise, using Keyguard's recorded press banks (≈ 5.7k presses over ~10 keyboard/mic
+   domains; E1 draws from 5 of them). If it hurts, those banks become a training augmentation (not done: no training in this phase).
 4. **Red-team the detector (stretch, needs GPU).** Keyguard's `optimize_perturbation` finds bounded (−18 dB)
    perturbations against a differentiable attacker. Point it at Hearsay's R4ft: can an inaudible perturbation carry a
    deepfake past the detector? Then harden. The same weapon is a shield in one project and an attack on the other.
