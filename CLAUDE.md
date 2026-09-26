@@ -2,6 +2,7 @@
 
 HackGT 2026 NSA challenge: score 1,671 test clips 0.0 (real) → 1.0 (synthetic); graded 60% minDCF, 20% creativity,
 20% GitHub docs. **Start by reading `docs/GPU_HANDOFF.md`**: current results, what's paused, and the ordered to-do list.
+Two machines work on this repo at once: **read `plans/07_two_node_protocol.md`** for roles, channels and rules.
 
 ## Owner decisions (don't re-ask)
 - **Test audio (`data/raw/hgt_test`) is inference only**: no fitting, normalization stats, calibration, thresholds,
