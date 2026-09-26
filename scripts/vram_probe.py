@@ -49,6 +49,8 @@ def parse(argv=None):
     p.add_argument("--attn", default="sdpa")
     p.add_argument("--configs", default="abcdef")
     p.add_argument("--steps", type=int, default=12)
+    p.add_argument("--eval-batch", type=int, default=32,
+                   help="windows per eval forward to probe (= finetune_ssl.py --eval-batch)")
     p.add_argument("--dry-run", action="store_true", help="tiny random model + synthetic wavs (CPU test mode)")
     p.add_argument("--loader-clips", type=int, default=2000)
     p.add_argument("--real-steps", type=int, default=50)
@@ -189,6 +191,8 @@ def run_one(a):
         last = times[-8:] if len(times) > 1 else times
         med = float(np.median(last[1:] if len(last) > 1 else last))
         res.update(step_s=med, clips_per_s=mb / med, spill=spill_flag(times), step_times=times)
+        if loader is None:  # eval forward at --eval-batch windows, AdamW states still resident (as at step 300)
+            res.update(eval_batch=a.eval_batch, **eval_forward(model, dev, a.eval_batch, amp))
         if loader is not None:
             compute = [t - d for t, d in zip(times, data_times)]
             res.update(real_steps=n, e2e_clips_per_s=mb * n / sum(times),
@@ -205,10 +209,33 @@ def run_one(a):
     return res
 
 
+def eval_forward(model, dev, batch, amp):
+    """One no_grad eval() forward of `batch` random 4 s windows (2 timed calls) -> eval_ok / eval_s / eval_oom."""
+    import torch
+
+    from hearsay.models.ssl_e2e import N_SAMP
+    model.eval()
+    try:
+        with torch.no_grad(), amp:
+            x = torch.randn(batch, N_SAMP, device=dev) * 0.05
+            ts = []
+            for _ in range(2):
+                t = time.time()
+                model(x)
+                if dev.type == "cuda":
+                    torch.cuda.synchronize(dev)
+                ts.append(time.time() - t)
+        return {"eval_ok": True, "eval_oom": False, "eval_s": ts[-1]}
+    except torch.OutOfMemoryError as e:
+        return {"eval_ok": False, "eval_oom": True, "eval_error": str(e).splitlines()[0]}
+    finally:
+        model.train()
+
+
 def child(a, key, real=False):
     cmd = [sys.executable, str(Path(__file__).resolve()), "--one", key, "--device", a.device, "--model", a.model,
            "--backend", a.backend, "--attn", a.attn, "--steps", str(a.steps), "--workers", str(a.workers),
-           "--real-steps", str(a.real_steps if real else 0)]
+           "--real-steps", str(a.real_steps if real else 0), "--eval-batch", str(a.eval_batch)]
     if a.synthetic:
         cmd += ["--synthetic", a.synthetic]
     if a.dry_run:
@@ -229,7 +256,7 @@ def child(a, key, real=False):
 
 def pick(results):
     ok = [r for r in results if not r.get("oom") and not r.get("error") and not r.get("skipped")
-          and not r.get("spill") and r.get("clips_per_s")]
+          and not r.get("spill") and r.get("clips_per_s") and r.get("eval_ok", True)]
     limit = None
     caps = [r["cap_gb"] for r in results if r.get("cap_gb")]
     if caps:
@@ -252,8 +279,13 @@ def loader_throughput(a):
 
 
 def markdown(results, pick_key, limit, thr):
-    head = ("| cfg | config | trainable M | peak alloc GB | peak reserved GB | s/step | clips/s | OOM | spill | note |\n"
-            "|---|---|---|---|---|---|---|---|---|---|\n")
+    head = ("| cfg | config | trainable M | peak alloc GB | peak reserved GB | s/step | clips/s | OOM | spill | "
+            "eval fwd | note |\n|---|---|---|---|---|---|---|---|---|---|---|\n")
+
+    def ev(r):
+        if "eval_batch" not in r:
+            return "n/a"
+        return f"OOM at {r['eval_batch']}" if r.get("eval_oom") else f"{r['eval_s']:.3f} s @ {r['eval_batch']}"
 
     def f(v, fmt="{:.2f}"):
         return "n/a" if v is None else fmt.format(v)
@@ -261,7 +293,8 @@ def markdown(results, pick_key, limit, thr):
         f"| {r['key']}{' **pick**' if r['key'] == pick_key else ''} | {r['desc']} | {f(r.get('trainable_m'), '{:.1f}')}"
         f" | {f(r.get('peak_alloc_gb'))} | {f(r.get('peak_reserved_gb'))} | {f(r.get('step_s'), '{:.3f}')} | "
         f"{f(r.get('clips_per_s'), '{:.1f}')} | {'yes' if r.get('oom') else 'no'} | "
-        f"{'yes' if r.get('spill') else 'no'} | {r.get('skipped') or r.get('error') or ''} |\n" for r in results)
+        f"{'yes' if r.get('spill') else 'no'} | {ev(r)} | {r.get('skipped') or r.get('error') or ''} |\n"
+        for r in results)
     lim = f"{limit:.2f} GB (85 % of the capped budget)" if limit else "n/a (CPU)"
     tail = f"\nPick: **{pick_key}** (fastest with peak reserved <= {lim}).\n"
     if thr:
