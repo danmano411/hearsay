@@ -34,6 +34,8 @@ def _en(notes, path):
 CONFIGS = {
     # name: repo, n_shards (evenly spaced; None = all), keep(notes, path) filter
     "asvspoof2021_df": dict(repo="ASVspoof2021_DF", n_shards=4),
+    # second, disjoint DF sample (plan 10, R6 training data); the first sample used shards 0, 26, 53, 79 of 80
+    "asvspoof2021_df_b": dict(repo="ASVspoof2021_DF", n_shards=None, shards=[5, 12, 19, 33, 40, 47, 60, 70]),
     "cd_add": dict(repo="CD-ADD", n_shards=3),
     "decro_en": dict(repo="DECRO", n_shards=None,
                      keep=lambda n, p: p.rsplit("/", 1)[-1].startswith("en")),
@@ -55,7 +57,9 @@ def ingest(name):
     cfg = CONFIGS[name]
     repo, local = f"{ORG}/{cfg['repo']}", EXTERNAL / f"bench_{name}"
     shards = sorted(f for f in list_repo_files(repo, repo_type="dataset") if f.startswith("data/test-"))
-    if cfg["n_shards"]:
+    if cfg.get("shards"):
+        shards = [shards[i] for i in cfg["shards"]]
+    elif cfg["n_shards"]:
         k = cfg["n_shards"]
         shards = [shards[round(i * (len(shards) - 1) / max(k - 1, 1))] for i in range(k)]
     files = [hf_hub_download(repo, f, repo_type="dataset", local_dir=local) for f in shards]

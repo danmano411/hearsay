@@ -112,10 +112,12 @@ def r3(sets):
 
 
 # -------------------------------------------------------------------------------------------------------- R4ft
-def r4ft(sets, threads, device="cpu"):
+def r4ft(sets, threads, device="cpu", name=None):
+    """Any finetune_ssl run under data/models/r4ft_xlsr/<name> (default R4ft_xlsr_light; plan 10: R6_xlsr_light)."""
+    name_ = name or NAMES["r4ft"]
     import torch
     import finetune_ssl as fs
-    a = fs.parse(["score", "--device", device, "--name", NAMES["r4ft"], "--workers", "4"])
+    a = fs.parse(["score", "--device", device, "--name", name_, "--workers", "4"])
     run = Path(a.out) / a.name
     cfg = json.loads((run / "config.json").read_text())
     for k in fs.ARCH:
@@ -132,7 +134,7 @@ def r4ft(sets, threads, device="cpu"):
         paths = bench(name).path.tolist()
         cache = OUT / f"cache_{name}_{cfg['inference']}_{cfg['sha256'][:12]}.csv"
         OUT.mkdir(parents=True, exist_ok=True)
-        save(NAMES["r4ft"], name, paths, fs.score_paths(model, paths, cfg["max_windows"], dev, a, cache))
+        save(name_, name, paths, fs.score_paths(model, paths, cfg["max_windows"], dev, a, cache))
 
 
 # ------------------------------------------------------------------------------------------------------ report
@@ -215,9 +217,10 @@ def main():
     ap.add_argument("--workers", type=int, default=8)
     ap.add_argument("--threads", type=int, default=12)
     ap.add_argument("--device", default="cpu", help="r4ft: cpu | cuda | auto")
+    ap.add_argument("--name", default=None, help="r4ft: run name under data/models/r4ft_xlsr (default R4ft_xlsr_light)")
     a = ap.parse_args()
     sets = a.sets or [s for s in SETS if (BENCH / f"{s}.parquet").exists()]
-    {"r1": lambda: r1(sets, a.workers), "r3": lambda: r3(sets), "r4ft": lambda: r4ft(sets, a.threads, a.device),
+    {"r1": lambda: r1(sets, a.workers), "r3": lambda: r3(sets), "r4ft": lambda: r4ft(sets, a.threads, a.device, a.name),
      "report": lambda: report(sets)}[a.what]()
 
 
