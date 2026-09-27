@@ -1,8 +1,8 @@
 # R0 / R1: trivial cues and classic ML
 
-Rungs R0 and R1 of the [modeling ladder](../plans/06_modeling_ladder.md). R0 asks how much of the dataset can be
+Rungs R0 and R1 of the modeling ladder ([development log](../docs/00_development_log.md), stage 6). R0 asks how much of the dataset can be
 separated by cues that have nothing to do with speech, and whether `prep()` removes them. R1 is the interpretable
-classic baseline: cepstral and spectral statistics plus the 48 Phase-4 biology features, fed to LightGBM, logistic
+classic baseline: cepstral and spectral statistics plus the 48 Stage-4 biology features, fed to LightGBM, logistic
 regression and an RBF SVM.
 
 **Headline.** The best model is `R1_lgbm_all` (LightGBM on 228 features). It scores **combined minDCF 0.305** on
@@ -89,7 +89,7 @@ all reals. Higher numbers mean that slice is harder. Full per-generator tables a
 
 The first run capped training at all reals + 30k fakes. C3 featurized every train row (135,436 clips, 43,865 real,
 now including the 3,916 finished sim fakes) and retrained with `--suffix _full` so the earlier rows stay comparable.
-Eval subsets are the frozen ones (`docs/dataset.md`), so the numbers below are directly comparable.
+Eval subsets are the frozen ones (`docs/02_dataset.md`), so the numbers below are directly comparable.
 
 | model | val_testlike combined | **test_internal_testlike** official / brief / **combined** |
 |---|---|---|
@@ -124,7 +124,7 @@ Eval subsets are the frozen ones (`docs/dataset.md`), so the numbers below are d
 3. **Biology helps as a complement, not on its own.** Bio alone scores 0.71. Spectral alone scores 0.346, and
    spectral + bio scores 0.305. In the full model, bio is the largest SHAP family (31% of mean |SHAP|), ahead of
    spectral statistics (17%), MFCC (15 + 12% deltas) and LFCC (14 + 11%). With the channel shortcuts neutralized,
-   the bio cues that matter are the ones Phase 4 predicted. Directions below are per-class medians on
+   the bio cues that matter are the ones Stage 4 predicted. Directions below are per-class medians on
    `val_testlike`:
    - **phonation micro-perturbation.** `shimmer_local` is the top feature overall. `jitter_rap` and `jitter_local`
      are higher in real speech (0.0092 vs 0.0082 rap). Vocoders produce glottal cycles that are too regular.
@@ -157,7 +157,7 @@ or selected on HGT audio or on its scores.
 
 ## Shortcuts and limits
 
-- CQCC was skipped (ponytail): the constant-Q transform costs about 10× an STFT per clip. LFCC covers the same
+- CQCC was skipped: the constant-Q transform costs about 10× an STFT per clip. LFCC covers the same
   "linear high-frequency resolution" idea.
 - The SVM is trained on a balanced subsample of 15k clips, because the kernel is O(n²). It is not competitive, so
   scaling it up is not worth the time.

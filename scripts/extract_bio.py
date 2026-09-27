@@ -5,7 +5,7 @@ Manifest resolution: --manifest PATH > data/processed/manifest.parquet > data/pr
 
 Resumable: paths already in the output parquet are skipped; output is rewritten every --chunk clips.
 
-  python scripts/extract_bio.py --sample 3000 --out data/features/bio_sample.parquet   # phase-4 validation sample
+  python scripts/extract_bio.py --sample 3000 --out data/features/bio_sample.parquet   # stage-4 validation sample
   python scripts/extract_bio.py --workers 12            # full corpus, later
 """
 import argparse
@@ -106,7 +106,7 @@ def main():
         for i, r in enumerate(pool.imap_unordered(work, records, chunksize=8), 1):
             rows.append(r)
             if i % args.chunk == 0 or i == len(records):
-                # ponytail: full rewrite per chunk is O(n) each time; switch to part files if the corpus passes ~500k
+                # full rewrite per chunk is O(n) each time; switch to part files if the corpus passes ~500k
                 done = pd.concat([done, pd.DataFrame(rows)], ignore_index=True)
                 done.to_parquet(out, index=False)
                 rows = []

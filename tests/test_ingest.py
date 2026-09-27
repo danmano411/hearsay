@@ -1,4 +1,4 @@
-"""Checks for the Phase-2 ingest helpers: canonical conversion + ranged zip member extraction."""
+"""Checks for the Stage-2 ingest helpers: canonical conversion + ranged zip member extraction."""
 import io
 import sys
 import zipfile

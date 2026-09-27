@@ -1,4 +1,4 @@
-"""Shared helpers for Phase-2 external-data ingest scripts.
+"""Shared helpers for Stage-2 external-data ingest scripts.
 
 Every ingest turns (audio bytes or path) + metadata into a canonical clip via hearsay.audio
 and writes data/processed/manifests/<source>.parquet with exactly MANIFEST_COLUMNS.

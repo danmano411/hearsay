@@ -2,7 +2,7 @@
 
 Neutralizes cues the audits showed are artifacts of how each corpus was prepared, not of real vs fake:
 - 7-8 kHz band: the organizers' LJ reals keep energy to 8 kHz (no anti-alias roll-off), properly resampled
-  clips don't -> low-pass at 7 kHz (docs/speech_biology.md, reports/data_audit.md).
+  clips don't -> low-pass at 7 kHz (docs/05_speech_biology.md, reports/01_data_audit.md).
 - DC offset (openvoicev2), leading/trailing digital silence (your_tts/xtts_v2/playht padding), peak normalization
   (xtts_v2/your_tts at full scale) -> remove DC, trim, RMS-normalize.
 """
@@ -24,7 +24,7 @@ def prep(y, sr=SR):
     assert sr == SR, "canonical clips are 16 kHz"
     y = y - np.mean(y)
     yt, _ = librosa.effects.trim(y, top_db=40)
-    if len(yt) >= SR:  # ponytail: keep untrimmed if trimming leaves < 1 s (near-silent clips)
+    if len(yt) >= SR:  # keep untrimmed if trimming leaves < 1 s (near-silent clips)
         y = yt
     y = sosfiltfilt(_SOS, y)
     rms = np.sqrt(np.mean(y**2)) + 1e-8

@@ -1,13 +1,13 @@
-# R6 and the final submission (plan 10)
+# R6 and the final submission
 
 **Final submission: E5 = R4ft + R6 + R1 (LR fusion)**, chosen by the rule written before any R6 result existed
-(`plans/10_r6_final.md`). File: `submission/HearsayScoreKey4GeorgiaMellon_FINAL.tsv`. It is written in the scorer's
+([development log](../docs/00_development_log.md), stage 10). File: `submission/HearsayScoreKey4GeorgiaMellon_FINAL.tsv`. It is written in the scorer's
 direction (**higher = real**), with 1,671 rows in template order, all distinct, and `scripts/score.py validate`
 returns OK. Its rank correlation with the already-scored R5 file is 0.989. The organizers keep the better of the
 initial (R5: minDCF 0.0584, EER 2.5 %) and this final.
 
 ## R6: what was trained
-- **Recipe:** the exact R4ft recipe (`reports/r4ft_xlsr.md`), with seed 1.
+- **Recipe:** the exact R4ft recipe (`reports/04_r4ft_xlsr.md`), with seed 1.
 - **Extra training data:** 6,155 clips from ASVspoof 2021 DF (two disjoint samples), CD-ADD and DECRO-en
   (`scripts/ingest_bench.py`, `scripts/bench_to_manifest.py`). The frozen evaluation sets and all 185,915 existing
   rows are unchanged.
@@ -27,7 +27,7 @@ Validation curve (val_testlike combined, centre window; R4ft at the same step in
 - **Inference mode:** chosen on val_testlike only. win3 scored 0.0206 against the centre window's 0.0267.
 - **Checkpoint:** `best.pth` sha256 `db5053dd…`, step 4,096.
 
-### Deviation from plan 10 (recorded as it happened)
+### Deviation from the plan (recorded as it happened)
 The plan says to train until early stopping. That didn't happen, for three reasons:
 - The GPU was shared with another project's training runs that evening.
 - Claude Code's low-memory safeguard on the GPU laptop stopped R6 twice (19:32 and 20:20), both times at step
@@ -50,9 +50,9 @@ val_testlike ≤ R5 + 0.003 (fusions cross-fitted), and DeepVoice ≤ R5 + 0.02.
 | **E5: R4ft + R6 + R1, LR fusion** | **0.0099** | **0.152** | **yes → selected** |
 
 - **E5 fusion weights** (standardized inputs, fit on val_testlike): R4ft 6.00, R6 3.93, R1 1.69.
-- **R1 inside E5** is the refit booster (`reports/generalization.md`), used for every split.
+- **R1 inside E5** is the refit booster (`reports/06_generalization.md`), used for every split.
 - **Sigmoid temperature:** 7, sized from the validation margins (max 35.3) like the R5 file.
-- Selection table: `reports/r6_selection.csv`; code: `scripts/r6_select.py`.
+- Selection table: `reports/07_r6_selection.csv`; code: `scripts/r6_select.py`.
 
 ## Report-only, scored once after the choice
 `test_internal_testlike`, official settings:
@@ -65,7 +65,7 @@ val_testlike ≤ R5 + 0.003 (fusions cross-fitted), and DeepVoice ≤ R5 + 0.02.
 | R6 | 0.0236 | 0.89 % |
 
 E5 is slightly behind R5 on this in-domain set. Two things to weigh with that:
-- R5's number is optimistic, because this set informed the switch to R5 (`plans/06`, amendment).
+- R5's number is optimistic, because this set informed the switch to R5 ([development log](../docs/00_development_log.md), stage 7).
 - R6 gave up some in-domain accuracy for more varied training data.
 
 The rule was written knowing that validation cannot see gains on unfamiliar audio, which is what the HGT test

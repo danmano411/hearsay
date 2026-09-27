@@ -1,4 +1,4 @@
-"""Public benchmark sets for the generalization check (plan 09, Part A). Never training data.
+"""Public benchmark sets for the generalization check (reports/06_generalization.md). Never training data.
 
 usage: python scripts/ingest_bench.py <name> [<name> ...]   names: see CONFIGS
 
@@ -34,7 +34,7 @@ def _en(notes, path):
 CONFIGS = {
     # name: repo, n_shards (evenly spaced; None = all), keep(notes, path) filter
     "asvspoof2021_df": dict(repo="ASVspoof2021_DF", n_shards=4),
-    # second, disjoint DF sample (plan 10, R6 training data); the first sample used shards 0, 26, 53, 79 of 80
+    # second, disjoint DF sample (R6 training data); the first sample used shards 0, 26, 53, 79 of 80
     "asvspoof2021_df_b": dict(repo="ASVspoof2021_DF", n_shards=None, shards=[5, 12, 19, 33, 40, 47, 60, 70]),
     "cd_add": dict(repo="CD-ADD", n_shards=3),
     "decro_en": dict(repo="DECRO", n_shards=None,

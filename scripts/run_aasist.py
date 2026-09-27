@@ -6,10 +6,9 @@
     python scripts/run_aasist.py --name R3_aasist_ft --weights ... --hgt     # inference only
 Resumable: per-clip scores are appended to data/scores/cache/<name>[__hgt].csv and skipped on restart.
 
-Eval sets, default (gpu-safe, two-node protocol): write data/scores/<name>.parquet (path, score; higher = more fake,
-the same file report() writes) and print both minDCF readings + combined per eval set via evaluate(). The leaderboard
-is NOT touched; upload with `python tools/hubctl.py put data/scores/<name>.parquet` and the cpu node reports it.
-`--report` (cpu node only) additionally calls hearsay.evaluate.report(), which appends to reports/leaderboard.md.
+Eval sets: write data/scores/<name>.parquet (path, score; higher = more fake, the same file report() writes) and
+print both minDCF readings + combined per eval set via evaluate(). The leaderboard is not touched unless `--report`
+is given, which calls hearsay.evaluate.report() and appends to reports/leaderboard.md.
 --hgt is inference only and writes data/scores/<name>__hgt.parquet (filename, score).
 """
 import argparse
@@ -40,7 +39,7 @@ def parse(argv=None):
     p.add_argument("--batch", type=int, default=16)
     device.add_argument(p)
     p.add_argument("--report", action="store_true",
-                   help="cpu node only: also append to reports/leaderboard.md via report() (the single writer)")
+                   help="also append to reports/leaderboard.md via report()")
     return p.parse_args(argv)
 
 
@@ -53,8 +52,7 @@ def publish(name, df, notes="", leaderboard=False, m=None):
     df[["path", "score"]].to_parquet(out, index=False)  # same columns/format report() writes
     res = evaluate(df, m)
     print(res.to_string(index=False))
-    print(f"wrote {out} ({len(df)} clips); leaderboard untouched -> upload: python tools/hubctl.py put "
-          f"data/scores/{name}.parquet", flush=True)
+    print(f"wrote {out} ({len(df)} clips); leaderboard untouched", flush=True)
     return res
 
 

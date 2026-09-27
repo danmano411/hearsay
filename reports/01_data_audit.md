@@ -1,8 +1,8 @@
-# Data audit (phase 1)
+# Data audit (stage 1)
 
 What is in the training data we were given, what we changed, and which trivial cues a model could cheat with.
 Reproduce: `scripts/audit_raw.py` → `scripts/clean_given.py` → `scripts/make_splits.py` → `scripts/audit_shortcuts.py`
-(details in [docs/dataset.md](../docs/dataset.md)).
+(details in [docs/02_dataset.md](../docs/02_dataset.md)).
 
 ## TL;DR
 
@@ -14,11 +14,11 @@ Reproduce: `scripts/audit_raw.py` → `scripts/clean_given.py` → `scripts/make
 3. **One of those cues comes from our own pipeline.** The organizers' 242 real LJ clips arrive at 16 kHz with energy
    up to 8.0 kHz. Everything we resample from 22.05/24/44.1 kHz with soxr stops at about 7.8 kHz. So "energy at
    7.9–8 kHz" means "was already 16 kHz", which here means "real".
-4. **Adding the external corpora (phase 2) dilutes the shortcuts but does not remove them.** With 133k clips from
+4. **Adding the external corpora (stage 2) dilutes the shortcuts but does not remove them.** With 133k clips from
    10 sources, the same depth-3 tree still gets **minDCF 0.39** (DC offset and trailing silence carry most of it).
    A model that is not stopped from using these cues will learn them.
 5. **Test clips are much shorter than training clips.** HGT test median is 3.41 s; DiffSSD median is 6–9 s.
-6. **The given real class is tiny.** It is 242 clips of one speaker (LJ). External real speech (phase 2) raises
+6. **The given real class is tiny.** It is 242 clips of one speaker (LJ). External real speech (stage 2) raises
    bonafide to 30.7k clips.
 
 ## 1. Raw formats (native, before cleaning)
@@ -116,7 +116,7 @@ threshold is **< 0.5**.
 |---|---:|---:|---|
 | **given only** (DiffSSD + lj_real) | 47 / 13,411 | **0.000** | bw60 **0.072**, DC 0.31, trail_sil 0.44 |
 | LJ voice only (lj_real + full LJSpeech vs LJ-voice fakes) | 2,380 / 3,826 | **0.237** | DC 0.43, trail_sil 1.00 |
-| all sources (phase 1 + phase 2 + phase 3 manifests) | 7,866 / 19,970 | **0.393** | DC 0.49, trail_sil 0.74, bw60 0.82 |
+| all sources (stage 1 + stage 2 + stage 3 manifests) | 7,866 / 19,970 | **0.393** | DC 0.49, trail_sil 0.74, bw60 0.82 |
 
 Every row is below 0.5, so trivial cues leak in every configuration.
 
@@ -134,7 +134,7 @@ The band-edge cue is an artifact of the pipeline, not of the generators. Medians
 |---|---:|
 | your_tts fakes, natively 16 kHz | 8000 Hz |
 | lj_real (organizers' 16 kHz real) | **8000** Hz (p5 = 8000) |
-| full LJSpeech, resampled by us from 22.05 kHz (phase 2) | **7859** Hz |
+| full LJSpeech, resampled by us from 22.05 kHz (stage 2) | **7859** Hz |
 | LJ-voice DiffSSD fakes, resampled by us from 22.05 kHz | 7828–7859 Hz |
 | external corpora shipped at 16 kHz (ASVspoof, In-the-Wild, LibriSeVoc, …) | 7484–8000 Hz, varies by corpus and class |
 
@@ -142,7 +142,7 @@ The same speaker, recorded the same way, lands on different sides of the split d
 it. The organizers' resampler keeps energy up to Nyquist, and soxr_hq's anti-alias filter does not. The HGT test clips
 come at 16 kHz, most likely through the organizers' pipeline.
 
-## 4. Recommendations for modeling (phase 6)
+## 4. Recommendations for modeling (stage 6)
 
 Apply every item to both classes, at model input, in training and inference alike.
 
@@ -165,6 +165,6 @@ Apply every item to both classes, at model input, in training and inference alik
 - On the given data alone the real class is 242 clips from one speaker. The given-only row has just 47 bonafide
   eval clips, so a minDCF of exactly 0.000 is noisy. The finding (cues separate the classes) is robust; the exact
   number is not.
-- The sonar manifest listed 3,831 paths whose files were missing when this audit ran (phase 2 was still in
+- The sonar manifest listed 3,831 paths whose files were missing when this audit ran (stage 2 was still in
   progress), plus 8 duplicate rows. The shortcut audit skips missing files; `make_splits.py` drops duplicate paths
   with a warning.

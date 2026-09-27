@@ -1,4 +1,4 @@
-"""Summarise Phase-2 manifests (markdown tables for docs/external_data.md) and sanity-check them.
+"""Summarise Stage-2 manifests (markdown tables for docs/03_external_data.md) and sanity-check them.
 
 Checks: exact MANIFEST_COLUMNS, labels in {bonafide, spoof}, durations >= 3 s, license filled,
 every path exists, and no clip from data/raw/lj_real re-ingested.

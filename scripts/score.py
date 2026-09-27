@@ -1,4 +1,4 @@
-"""Scoring CLI (see docs/scoring.md).
+"""Scoring CLI (see docs/01_challenge_and_scoring.md).
 
   python scripts/score.py metrics  SCORES.tsv KEY.tsv [--higher-is-bonafide]
   python scripts/score.py validate SUBMISSION.tsv [--template TEMPLATE]
@@ -92,7 +92,7 @@ def cmd_validate(a):
     sys.exit(1 if errors else 0)
 
 
-# ---------------------------------------------------------------- simulate (figures + tables for docs/scoring.md)
+# ---------------------------------------------------------------- simulate (figures + tables for docs/01_challenge_and_scoring.md)
 N, P_FAKE = 1671, 0.3  # test set size and ~70/30 real/fake (brief)
 
 

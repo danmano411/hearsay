@@ -11,7 +11,7 @@ from hearsay.audio import MANIFEST_COLUMNS, MANIFESTS, PROCESSED, ROOT
 from hearsay.data.splits import assign_splits
 
 OUT = PROCESSED / "manifest.parquet"
-# Frozen eval subsets, committed to the repo so a fresh clone rebuilds the exact headline sets (docs/dataset.md).
+# Frozen eval subsets, committed to the repo so a fresh clone rebuilds the exact headline sets (docs/02_dataset.md).
 # Only rows in either subset are listed; every other row is in neither.
 FROZEN = ROOT / "splits" / "eval_subsets_frozen.csv"
 

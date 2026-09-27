@@ -1,6 +1,7 @@
-"""Plan 10: apply the pre-registered rule to R6 and write the final submission. Never reads HGT labels or feedback.
+"""R6 / final submission: apply the pre-registered rule (docs/00_development_log.md, stage 10) and write the final
+submission. Never reads HGT labels or feedback.
 
-    python scripts/r6_select.py            # table + decision -> reports/r6_selection.csv, data/scores/<pick>__hgt.parquet
+    python scripts/r6_select.py            # table + decision -> reports/07_r6_selection.csv, data/scores/<pick>__hgt.parquet
     python scripts/r6_select.py --write    # also builds submission/HearsayScoreKey4GeorgiaMellon_FINAL.tsv (higher = real)
 
 Inputs: data/scores/{R4ft_xlsr_light,R6_xlsr_light}{,__hgt}.parquet, data/bench/scores/*__deepvoice.parquet, the R1
@@ -29,7 +30,7 @@ from hearsay.features.spectral import FEATURES as SPEC  # noqa: E402
 from hearsay.metrics import min_dcf  # noqa: E402
 
 BENCH = DATA / "bench"
-VAL_TOL, DV_TOL, E5_VS_E = 0.003, 0.02, 0.002  # plan 10 rule, fixed before R6 existed
+VAL_TOL, DV_TOL, E5_VS_E = 0.003, 0.02, 0.002  # the rule, fixed before R6 existed
 
 
 def official(s, y):
@@ -119,9 +120,9 @@ def main():
     pick = next((c for c in ("E5", "E", "R6") if c in ok), None)
     if pick == "E5" and "E" in ok and ok["E5"].val > ok["E"].val + E5_VS_E:
         pick = "E"
-    print(f"\nDECISION (plan 10 rule): {pick or 'none passes -> final stays R5'}")
+    print(f"\nDECISION (pre-registered rule): {pick or 'none passes -> final stays R5'}")
     t["picked"] = t.cand == pick
-    out = ROOT / "reports" / "r6_selection.csv"
+    out = ROOT / "reports" / "07_r6_selection.csv"
     t.to_csv(out, index=False)
 
     if pick:

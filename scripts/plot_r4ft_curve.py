@@ -1,4 +1,4 @@
-"""Figure for reports/r4ft_xlsr.md: R4ft run 1 val_testlike combined minDCF per eval.
+"""Figure for reports/04_r4ft_xlsr.md: R4ft run 1 val_testlike combined minDCF per eval.
 
     PYTHONPATH=src python scripts/plot_r4ft_curve.py    # reads data/models/r4ft_xlsr/R4ft_xlsr_light/log.jsonl
 """

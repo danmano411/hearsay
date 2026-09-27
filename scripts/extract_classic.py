@@ -36,7 +36,7 @@ from hearsay.features.spectral import FEATURES as SPEC, extract_spectral
 from hearsay.preprocess import SR, augment, prep
 
 sys.path.insert(0, str(Path(__file__).parent))
-from extract_bio import even  # noqa: E402  (water-filling stratified sampler from phase 4)
+from extract_bio import even  # noqa: E402  (water-filling stratified sampler)
 
 FEAT = DATA / "features"
 EVAL_CROP = 4.0

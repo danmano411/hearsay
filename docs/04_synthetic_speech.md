@@ -1,6 +1,6 @@
 # How synthetic speech is made, and what it leaves behind
 
-Phase 3 of HEARSAY. Goal: understand the generators behind the fakes we must detect well enough to
+Stage 3 of HEARSAY. Goal: understand the generators behind the fakes we must detect well enough to
 (1) predict which fingerprints a detector can use, and (2) generate our own **hard negatives** locally, on CPU,
 with open-source models only. ElevenLabs is studied from its public docs and blog, not its API.
 
@@ -116,7 +116,7 @@ Takeaways for modeling: (a) four PT generators share LJ's voice and text domain 
 the channel-matched negatives the master plan asks for; (b) the LJ-trained generators mostly share one vocoder
 family (HiFi-GAN), so a detector that only learns "HiFi-GAN" would still miss XTTS/ElevenLabs/PlayHT; (c) two
 generators arrive as MP3, so codec traces are confounded with "commercial" and must be neutralized by applying
-codec augmentation to both classes (phase 6).
+codec augmentation to both classes (stage 6).
 
 ## 5. Artifact catalogue
 
@@ -128,7 +128,7 @@ one.
 | Text front end | Mispronounced rare words, wrong stress, flat question intonation | G2P / normalization errors | ASR-free is hard; prosody features (F0 contour at phrase ends), or ASR confidence | - |
 | Acoustic model (duration) | Over-regular phone durations and pauses; no hesitations, fillers, restarts | Duration predictor regresses to the mean | Rhythm statistics: variance of syllable rate, pause-length distribution; modulation spectrum at 2-8 Hz | `sim_modulation.png` |
 | Acoustic model (mel regression) | Over-smoothed spectra: blurred formant transitions, weak high-band detail | L1/L2 loss on mels averages plausible outputs | Spectral flux, formant-transition sharpness, high-band variance | `sim_stages.png` |
-| Acoustic model (missing physiology) | No breaths, lip smacks, micro-jitter/shimmer patterns of a real glottis | Rarely in the training targets, or smoothed away | Breath detection, jitter/shimmer, HNR (see `docs/speech_biology.md`, phase 4) | - |
+| Acoustic model (missing physiology) | No breaths, lip smacks, micro-jitter/shimmer patterns of a real glottis | Rarely in the training targets, or smoothed away | Breath detection, jitter/shimmer, HNR (see `docs/05_speech_biology.md`, stage 4) | - |
 | Mel bottleneck | Hard band edge at the mel `fmax` | Nothing above `fmax` is represented, so the vocoder cannot produce it | Long-term spectrum above the edge; energy ratio 7-8 kHz | SpeechT5 (`fmax` 7.6 kHz): -33 dB at 7-8 kHz vs -19 dB real |
 | Native sample rate / training data band | Roll-off or empty band above the generator's Nyquist or its training data's bandwidth | Model trained at 16/22.05/24 kHz or on band-limited data | Spectrum shape above 4 kHz; after resampling to 16 kHz only edges < 8 kHz remain visible | MMS-TTS: -17 dB at 4-8 kHz; ElevenLabs, PlayHT, OpenVoice roll off > 7 kHz (`sim_highband.png`) |
 | Vocoder: phase | Griffin-Lim: incoherent ("phasey", metallic) phase; neural vocoders: plausible phase but not physically consistent with a glottal source | Phase is estimated, not measured | Group delay, instantaneous-frequency deviation, relative phase shift; raw-waveform models | Griffin-Lim clearly off in both phase-coherence statistics; neural vocoders close to real (`sim_phase.png`) |
@@ -190,7 +190,7 @@ regenerated with `scripts/sim_figures.py --n 60` after the full run.
 
 Not done, and why: Piper/Kokoro/XTTS (more installs, larger CPU cost for similar coverage; VITS and SpeechT5 cover
 the flow/VAE and autoregressive-mel families); codec variants of sim clips (a codec applied only to fakes would
-create a shortcut; phase 6 applies codecs to both classes).
+create a shortcut; stage 6 applies codecs to both classes).
 
 ### What it looks like
 

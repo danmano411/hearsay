@@ -1,4 +1,4 @@
-"""R4ft (G5, plans/08_ssl_aasist.md): end-to-end fine-tune of XLS-R-300M + a spoofing back end on raw 16 kHz audio.
+"""R4ft / R6: end-to-end fine-tune of XLS-R-300M + a spoofing back end on raw 16 kHz audio.
 
     python scripts/finetune_ssl.py probe --device cuda                       # VRAM probe first (scripts/vram_probe.py)
     python scripts/finetune_ssl.py train --backend light                     # run 1: K = 12, back end A
@@ -19,8 +19,8 @@ Outputs under <out>/<name>/: args.json, log.jsonl, last.pth, best.pth, config.js
 Score: loads best.pth, chooses centre vs 3 windows on val_testlike only, writes config.json (checkpoint sha256 +
 inference mode) BEFORE scoring test_internal_testlike, then data/scores/<name>.parquet (path, score) for
 val / val_testlike / test_internal_testlike rows and, with --hgt, data/scores/<name>__hgt.parquet (filename, score) —
-HGT strictly inference-only in eval() mode, after config.json exists. Self-check with evaluate(); never report()
-(two-node protocol: the cpu node owns the leaderboard). Upload with the printed `python tools/hubctl.py put` commands.
+HGT strictly inference-only in eval() mode, after config.json exists. Self-check with evaluate(); the leaderboard
+(reports/leaderboard.md) is written separately with hearsay.evaluate.report().
 """
 import argparse
 import contextlib
@@ -31,7 +31,6 @@ import json
 import math
 import os
 import random
-import subprocess
 import sys
 import time
 from pathlib import Path
@@ -107,7 +106,6 @@ def parse(argv=None):
     p.add_argument("--hgt", action="store_true", help="score: also score HGT test audio (inference only)")
     p.add_argument("--force", action="store_true",
                    help="score: overwrite an existing config.json with another checkpoint/inference mode (recorded)")
-    p.add_argument("--heartbeat", action="store_true", help="after each eval: hubctl.py job --me gpu <progress>")
     device.add_argument(p)
     a, rest = p.parse_known_args(argv)
     if a.mode != "probe" and rest:
@@ -371,10 +369,6 @@ def train(a):
         if len(watch):
             print("  watch slices (combined): " + ", ".join(f"{b}={v} {c:.3f}" for b, v, c in
                                                             zip(watch.by, watch.value, watch.combined)), flush=True)
-        if a.heartbeat:
-            ep = state["step"] / a.epoch_steps
-            subprocess.run([sys.executable, str(ROOT / "tools" / "hubctl.py"), "job", "--me", "gpu",
-                            f"G5 {a.name} ep {ep:.1f}/{a.max_epochs} vt {r['combined']:.3f}"], check=False)
         save_last()
 
     t_win = [time.time(), 0]
@@ -585,7 +579,7 @@ def score(a):
     out_dir.mkdir(parents=True, exist_ok=True)
     out = out_dir / f"{a.name}.parquet"
     df.to_parquet(out, index=False)
-    res = evaluate(df, m)  # self-check only; the cpu node runs report()
+    res = evaluate(df, m)  # self-check; report() writes the leaderboard separately
     print(res.to_string(index=False), flush=True)
     puts = [out]
 
@@ -608,13 +602,9 @@ def score(a):
         hg.to_parquet(hout, index=False)
         print(f"HGT: {len(hg)} clips scored -> {hout}", flush=True)
         puts.append(hout)
-    print("leaderboard untouched (cpu node runs report()). Upload:", flush=True)
+    print("wrote:", flush=True)
     for p in puts:
-        try:
-            rel = p.resolve().relative_to(ROOT.resolve()).as_posix()
-        except ValueError:
-            rel = str(p)
-        print(f"  python tools/hubctl.py put {rel}", flush=True)
+        print(f"  {p}", flush=True)
     return res, config
 
 

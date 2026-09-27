@@ -1,4 +1,4 @@
-"""Physiology-motivated acoustic features (see docs/speech_biology.md for the why).
+"""Physiology-motivated acoustic features (see docs/05_speech_biology.md for the why).
 
 extract_bio(y, sr=16000) -> dict[str, float] with a FIXED key set (FEATURES). Every group is computed
 independently and falls back to NaN, so silent / unvoiced / tiny clips never crash.
@@ -308,7 +308,7 @@ def extract_bio(y, sr=SR):
                 warnings.simplefilter("ignore")
                 r = fn(*a)
             feats.update({k: _nan(v) for k, v in r.items()})
-        except Exception:  # ponytail: a failing group only NaNs its own keys; log if silent failures become a problem
+        except Exception:  # a failing group only NaNs its own keys; log if silent failures become a problem
             pass
 
     snd = parselmouth.Sound(y, sampling_frequency=SR)

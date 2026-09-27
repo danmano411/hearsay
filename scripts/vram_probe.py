@@ -1,4 +1,4 @@
-"""R4ft VRAM probe (plans/08_ssl_aasist.md §4): run BEFORE the first training job.
+"""R4ft VRAM probe: run BEFORE the first training job.
 
     python scripts/vram_probe.py --device cuda                 # -> data/models/r4ft_xlsr/probe.json + probe.md
     python scripts/vram_probe.py --device cpu --dry-run --out <tmp>   # tiny random model, CPU only (tests)
@@ -11,7 +11,7 @@
    (a) K12 ckpt mb8  (b) K12 no-ckpt mb8  (c) K12 ckpt mb16  (d) K24 lower-12-frozen ckpt mb8
    (e) K24 all-trainable ckpt mb4  (f) (e) + 8-bit AdamW, only if bitsandbytes imports and a 1-step sanity check
    matches fp32 AdamW.
-2. Pick: the fastest config (clips/s) whose peak reserved <= 85 % of the capped budget (0.92 x VRAM, G1).
+2. Pick: the fastest config (clips/s) whose peak reserved <= 85 % of the capped budget (0.92 x VRAM).
 3. Throughput: a loader-only loop (--loader-clips clips through the real train DataLoader: load, augment, prep, crop)
    and the picked config for --real-steps steps fed by the real DataLoader, clips/s for GPU and loader separately.
 --dry-run: tiny random-init wav2vec2 (24 blocks x 32 dims, same 199-frame geometry), synthetic wavs instead of the
@@ -134,7 +134,7 @@ def run_one(a):
     from hearsay.models.ssl_e2e import N_SAMP, build_model, param_groups
     cfg = CONFIGS[a.one]
     res = {"key": a.one, **cfg, "model": a.model, "backend": a.backend, "oom": False, "error": None}
-    dev = device.resolve(a.device)  # CUDA: caps the allocator at 0.92 x VRAM (G1)
+    dev = device.resolve(a.device)  # CUDA: caps the allocator at 0.92 x VRAM
     cuda = dev.type == "cuda"
     if cuda:
         total = torch.cuda.get_device_properties(dev).total_memory

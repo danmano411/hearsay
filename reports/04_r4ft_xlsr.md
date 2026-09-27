@@ -1,7 +1,6 @@
 # R4ft: end-to-end XLS-R fine-tune (best model so far)
 
-Rung R4ft of the [modeling ladder](../plans/06_modeling_ladder.md), run as pre-registered in
-[`plans/08_ssl_aasist.md`](../plans/08_ssl_aasist.md) (issue #15). We fine-tuned a self-supervised speech front end,
+Rung R4ft of the modeling ladder, run as planned before training ([development log](../docs/00_development_log.md), stage 7). We fine-tuned a self-supervised speech front end,
 `facebook/wav2vec2-xls-r-300m` cut to its first 12 transformer blocks, end to end with a small pooling head on raw
 16 kHz audio. Training took one run of 2 h 24 min on an 8 GB laptop GPU.
 
@@ -18,7 +17,7 @@ _Figure: `PYTHONPATH=src python scripts/plot_r4ft_curve.py`, from the run's `log
 
 minDCF: lower is better, 0 is perfect, and 1.0 is what a constant score gets. *official* and *brief* are the two
 readings of the organizers' cost function, and *combined* is their mean, which is the selection metric
-([`docs/scoring.md`](../docs/scoring.md) §1–§2). Every R4ft number below was recomputed from
+([`docs/01_challenge_and_scoring.md`](../docs/01_challenge_and_scoring.md) §1–§2). Every R4ft number below was recomputed from
 `data/scores/R4ft_xlsr_light.parquet` with `hearsay.evaluate.evaluate()`. The R1 and R3 rows are from
 [`leaderboard.md`](leaderboard.md).
 
@@ -33,13 +32,12 @@ readings of the organizers' cost function, and *combined* is their mean, which i
 | R3 AASIST zero-shot (pretrained ASVspoof5 weights) | val_testlike | 6,274 / 2,689 | 0.9888 | 0.6738 | 0.8313 | 32.72 |
 | R3 AASIST zero-shot | test_internal_testlike | 6,823 / 2,924 | 0.9904 | 0.6551 | 0.8227 | 32.45 |
 
-The canonical leaderboard number is the one the cpu node writes with `report()`. This node only self-checks with
-`evaluate()` and never writes the leaderboard. The two computations use the same metric code, and the numbers above
-match the self-check printed at scoring time (`data/models/r4ft_xlsr/run1_score.log`).
+The leaderboard number comes from `report()`; the scoring run self-checks with `evaluate()`. Both use the same
+metric code, and the numbers above match the self-check printed at scoring time (`data/models/r4ft_xlsr/run1_score.log`).
 
 ## 2. Model and recipe
 
-Full rationale and memory arithmetic are in [plan 08](../plans/08_ssl_aasist.md) §2–§6. In brief:
+The architecture is drawn in [`docs/06_architecture.md`](../docs/06_architecture.md). In brief:
 
 | | |
 |---|---|
@@ -47,7 +45,7 @@ Full rationale and memory arithmetic are in [plan 08](../plans/08_ssl_aasist.md)
 | Back end ("light", A) | Learned softmax weights over the 13 hidden states → Linear 1024→256 → attentive statistics pooling → 1 spoof logit. BCE loss. Score = logit, higher = more fake. |
 | Precision / memory | bf16 autocast, fp32 master weights and fp32 AdamW. Non-reentrant gradient checkpointing on the blocks, SDPA attention. `set_per_process_memory_fraction(0.92)`, so an over-allocation raises OOM instead of silently spilling to shared memory under Windows WDDM. |
 | Batching | Micro-batch 8 (4 real + 4 fake) × 4 accumulation = 32 clips per optimizer step. |
-| Sampling | Train rows only. Cells are (source, label), drawn ∝ √n, and generators within a fake cell are drawn ∝ √n. **asvspoof5 reals ×2** was taken from R1's `val_testlike` slices ([`error_analysis.md`](error_analysis.md)). |
+| Sampling | Train rows only. Cells are (source, label), drawn ∝ √n, and generators within a fake cell are drawn ∝ √n. **asvspoof5 reals ×2** was taken from R1's `val_testlike` slices ([`03_error_analysis.md`](03_error_analysis.md)). |
 | Optimizer | AdamW (0.9, 0.98), weight decay 0.01. Front-end top LR 2e-5 with layer-wise decay 0.85 per block downward. Back-end LR 1e-3. Grad clip 1.0. |
 | Schedule | 300 steps with the front end frozen (back-end warm-up), then 500 steps of linear warm-up, then cosine to 5 % over 16 virtual epochs of 1,024 steps. Early stopping ended the run at step 10,240. |
 | Regularization | HF time masking p = 0.05, length 10. Dropout 0.1. Layerdrop 0. |
@@ -62,7 +60,7 @@ PYTHONPATH=src python scripts/finetune_ssl.py train --device cuda --heartbeat   
 PYTHONPATH=src python scripts/finetune_ssl.py score --device cuda --hgt             # windows chosen on val_testlike -> config.json -> val/test -> HGT (inference only)
 ```
 
-**Deviations from plan 08** (from PR #34, all intended):
+**Deviations from the original training plan** (all intended):
 
 1. `mask_time_min_masks=0`, because HF's default of 2 forces 10 % masking regardless of the probability.
 2. The residual blocks' (1, 3) max-pool is replaced with Identity in back end B, as in Tak's SSL variant. Otherwise
@@ -102,7 +100,7 @@ loader and accumulation, was 37 clips/s.
 It picked **nothing**: every config reserved more than 6.20 GiB, although (a)–(d) allocated only 67–74 % of the cap. Reserved
 memory includes the caching allocator's slack, which torch frees and retries before it raises OOM. For run 1, config
 (a) was **chosen by hand** as the plan's default and its most conservative K12 option. In training it held 5.46 GiB
-reserved from the first front-end step onward, below its probe figure. PR #35 later changed the rule to peak *allocated* ≤ 85 % of the cap plus
+reserved from the first front-end step onward, below its probe figure. The rule was later changed to peak *allocated* ≤ 85 % of the cap plus
 reserved ≤ 95 % as a fragmentation ceiling. On these numbers the new rule picks (b), which is 21 % faster. That
 affects only runs after run 1, and none were run (§8).
 
@@ -114,7 +112,7 @@ cannot evaluate at batch 32. That confirms the choice to truncate to 12 blocks.
 
 The run had one eval after the 300-step back-end warm-up, then one eval every 1,024 optimizer steps (one "virtual
 epoch" = 32,768 clips). Evals during training use the **centre 4 s window** of each `val_testlike` clip. The
-3-window mode was compared only once, at scoring time (§5). The watch slices are plan 08 §7's list, taken from R1's
+3-window mode was compared only once, at scoring time (§5). The watch slices were fixed before training, taken from R1's
 weak spots. Real-source rows score that source's reals against all fakes. Generator rows score that generator's
 fakes against all reals. Both playht and unit_speech are **held out of training**.
 
@@ -149,7 +147,7 @@ What was decided where:
 | Rule | What happened in this run |
 |---|---|
 | Train on `split == "train"` only | The sampler holds only the 135,436 train rows and asserts it on every row. The held-out generators (playht, unit_speech, diffgan_tts) and all `val` / `test_internal` rows never reached the optimizer. |
-| Every choice on `val_testlike` | **Checkpoint:** early stopping on `val_testlike` combined (step 6,144). **Inference windows:** centre 0.0166 vs 3 windows 0.0121 on `val_testlike` → `win3`. Nothing else was chosen: the recipe is plan 08's pre-registered default, and VRAM config (a) was picked from the probe, which uses random audio. |
+| Every choice on `val_testlike` | **Checkpoint:** early stopping on `val_testlike` combined (step 6,144). **Inference windows:** centre 0.0166 vs 3 windows 0.0121 on `val_testlike` → `win3`. Nothing else was chosen: the recipe is the pre-registered default, and VRAM config (a) was picked from the probe, which uses random audio. |
 | `config.json` frozen before test is scored | `score` compared the two window modes on `val_testlike` and wrote `config.json` (checkpoint sha256 `346c569b…17faf`, `inference: win3`, `forced: false`, at 08:15:00). Only then did it score `val` and `test_internal_testlike` (`run1_score.log` shows this order). A test enforces the order (`test_score_writes_config_first_and_never_reports`). |
 | HGT is inference only | The 1,671 HGT clips were scored once, by the frozen checkpoint in `eval()` mode, after `config.json` existed. No statistic, threshold or choice uses them. |
 | One run | **One training run, no reruns and no variants.** The `test_internal_testlike` number above is the first and only time this set was scored. |
@@ -186,7 +184,7 @@ The leave-one-slice-out numbers are diagnostic, computed after the fact on the h
 
 Computed with `hearsay.evaluate.per_source(scores, "test_internal_testlike")` after `config.json` was frozen. None
 of these numbers fed a decision. The R1 column is `R1_lgbm_all_full` from
-[`error_analysis.md`](error_analysis.md) ("—" = not listed there).
+[`03_error_analysis.md`](03_error_analysis.md) ("—" = not listed there).
 
 **Real clips against all fakes** (a high number means that source's real clips look fake):
 
@@ -246,11 +244,11 @@ and chose nothing from it. minDCF is rank-only, so no threshold is needed for th
 
 ## 8. Limitations and next steps
 
-- **Runs 2 and 3 were not run.** Plan 08 budgeted run 2 (the SSL-AASIST back end B) and run 3 (one change chosen from
+- **Runs 2 and 3 were not run.** The plan budgeted run 2 (the SSL-AASIST back end B) and run 3 (one change chosen from
   slices, for example config (b) or K24 with the lower 12 frozen). The owner's stop criterion (headline ≤ 0.05) was
   met by run 1, so the GPU time went elsewhere. Back end B and the faster config (b) are therefore untested.
-- **This is a self-check.** The canonical leaderboard number is the one the cpu node computes with `report()` on
-  the uploaded parquet. The final submission is chosen by plan 06's pre-registered rule: `val_testlike` combined
+- **This is a self-check.** The leaderboard number is computed with `report()` from the same scores. The final
+  submission is chosen by the pre-registered rule: `val_testlike` combined
   across single models and cross-fitted fusions, with a fusion needing to win by at least 0.002.
 - **Scores are raw logits, not probabilities.** The submission therefore needs
   `scripts/make_submission.py --model R4ft_xlsr_light --sigmoid`. The sigmoid is fixed and monotone, so minDCF is
@@ -258,7 +256,7 @@ and chose nothing from it. minDCF is rank-only, so no threshold is needed for th
 - **Selection optimism** on `val_testlike` (§5) means 0.028 is the number to expect, not 0.012.
 - **Remaining weak spots:** asvspoof5 and In-the-Wild reals (channel/corpus effects), older ASVspoof 2019 LA attacks,
   and the newest codec-LM TTS systems, which have too few clips here to measure. More data from those systems (full
-  MLAAD is gated, see [`docs/external_data.md`](../docs/external_data.md)) and RawBoost-style channel augmentation
+  MLAAD is gated, see [`docs/03_external_data.md`](../docs/03_external_data.md)) and RawBoost-style channel augmentation
   are the obvious next steps.
 - **Licence.** The model was trained on DiffSSD (CC BY-NC-ND 4.0), SONAR and MLAAD-tiny (CC BY-NC 4.0) among others,
   so its weights inherit a **non-commercial-only** restriction ([README credits](../README.md#credits-and-licenses)).
