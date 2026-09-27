@@ -144,5 +144,5 @@ Two laptops shared the work. A CPU machine acted as coordinator and was the only
   - Guardrails relative to E5 (the current final): `val_testlike` ≤ E5 + 0.003 and DeepVoice ≤ E5 + 0.02.
   - Preference: E7 > E7s. Exception: E7s if its `val_testlike` beats E7's by more than 0.002. If neither passes, E5
     stays the final.
-  - Time box: a model not scored by 06:15 is left out; the final file is built by 07:00.
+  - Time box: a model not scored and uploaded by 05:45 is left out; the final file is built by 06:30.
   - Nothing is chosen from the organizers' feedback or the HGT audio.
