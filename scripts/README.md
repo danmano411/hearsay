@@ -66,3 +66,8 @@ Run from the repo root with `PYTHONPATH=src` (see the main README). Stage number
 |---|---|
 | `bench_to_manifest.py` | Registers three benchmark sets as R6 training sources (never DeepVoice or the Keyguard sets). |
 | `r6_select.py` | Applies the pre-registered rule to R6 and its ensembles and writes the final submission (E5). |
+
+## Stage 11: R7 (RawBoost) and the final submission
+| script | what it does |
+|---|---|
+| `r7_select.py` | Applies the Stage 11 rule to R7a and its ensembles and writes the final submission (E7). |

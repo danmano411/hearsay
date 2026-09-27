@@ -151,3 +151,7 @@ Two laptops shared the work. A CPU machine acted as coordinator and was the only
   combined 0.0283 at step 5,120), so it resumes from its checkpoint for up to 3 more hours under its unchanged early stop.
   New time box: scored and uploaded by 07:05; the final file is built by 07:30. The step-5,120 scores stay as the
   fallback if the resumed run misses the time box. The selection rule itself is unchanged; E7 is then R4ft + R6 + R7a + R1.
+- **Outcome (06:15):** R7a trained in three legs (a memory-safeguard kill at step ~6,250; owner-approved resume with
+  2 loader workers), early-stopped at 14,336, best step 10,240. Rule result: E7 (R4ft + R6 + R7a + R1) passes and is
+  the final (val_testlike 0.0088 vs E5 0.0099; DeepVoice 0.1330 vs 0.1515). Details:
+  [`reports/08_r7_rawboost_and_final.md`](../reports/08_r7_rawboost_and_final.md).
