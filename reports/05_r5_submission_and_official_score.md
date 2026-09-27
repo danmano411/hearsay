@@ -16,7 +16,7 @@ The organizers scored our submission on the 1,671-clip HGT test set: **minDCF 0.
 - **Scorer, now confirmed:** `calculate_metrics.py` from the ASVspoof5 evaluation package with **Pspoof = 0.3,
   Cmiss = 1, Cfa = 4**, reading a **higher score as bonafide (real)**. The brief says the opposite (1.0 = synthetic).
   Our first file followed the brief and scored exactly 1.0: every clip ranked backwards. The flipped copy
-  (`1 − score`) is the one scored above (`docs/scoring.md` §7).
+  (`1 − score`) is the one scored above (`docs/01_challenge_and_scoring.md` §7).
 - **Best of two:** the organizers score the initial and the final submission and keep the lower minDCF. Any file we
   send from now on must use the flipped direction (`make_submission.py --higher-is-real`).
 - **The HGT test is harder than our held-out set** (0.058 vs 0.014), as expected: its sources and generators differ
@@ -54,7 +54,7 @@ R4ft is **9× better than the best classic model**, and both cost readings agree
 The fine-tuned SSL front end fixed exactly the two failure modes the error analysis identified: unseen generators, and
 real speech from unusual recording chains.
 
-## Selection (pre-registered before any R4ft headline existed; `plans/06_modeling_ladder.md`)
+## Selection (pre-registered before any R4ft headline existed; [development log](../docs/00_development_log.md), stage 7)
 
 Candidates were compared on `val_testlike`: fusions by their group-cross-fitted number, and a fusion had to win by
 ≥ 0.002. R4ft alone (0.0121) beat both fusions (0.0128, 0.0127), so **R4ft is the submission**. The R4ft + R1 fusion
@@ -71,7 +71,7 @@ held-out fakes and real corpora differ from validation. It is a reminder that th
 ## Owner amendment: switching to the fusion
 
 The rule above picked R4ft. After the headline scores were in, the owner switched to the fusion (full record:
-`plans/06_modeling_ladder.md`, "Amendment"). Evidence that does not use the headline set:
+[development log](../docs/00_development_log.md), stage 7). Evidence that does not use the headline set:
 
 | check (no selection on it) | R4ft | R4ft + R1 fusion |
 |---|---|---|
@@ -98,15 +98,15 @@ Equal-error rate 0.76 %; best plain accuracy **99.40 %** (58 errors in 9,747). R
 
 ## How each part of the project fed the result
 
-- **Simulation** (`docs/synthetic_speech.md`): 5,204 own fakes, 3,916 of them in every model's training data. The
+- **Simulation** (`docs/04_synthetic_speech.md`): 5,204 own fakes, 3,916 of them in every model's training data. The
   HiFi-GAN copy-synthesis of LibriSpeech speakers is the **hardest fake type in all of validation**: R1 is at chance
   (0.917) and R4ft at 0.13. VITS in the LJ voice is second (R4ft 0.045). The sim's artifact catalogue also motivated
   the 7 kHz / high-band handling. We did not run a no-sim ablation, so its effect on training is not measured.
-- **Biology** (`docs/speech_biology.md`): 48 physiology features. Alone 0.600, and they add to spectral features in R1.
+- **Biology** (`docs/05_speech_biology.md`): 48 physiology features. Alone 0.600, and they add to spectral features in R1.
   Their biggest contribution was diagnostic: they exposed the 8 kHz channel shortcut in the given reals. In the final
   fusion they add nothing beyond R1 (R4ft + biology-only: 0.0141 validation).
 - **External data**: took reals from 0.3 % to 31 % of the data. Without it the model would learn "LJ voice = real".
-- **Scoring analysis** (`docs/scoring.md`): exact local scorer, both cost readings tracked everywhere, and the
+- **Scoring analysis** (`docs/01_challenge_and_scoring.md`): exact local scorer, both cost readings tracked everywhere, and the
   default-value game theory (no clip left unscored in the end).
 
 ## Challenge criteria (from the brief)
@@ -130,7 +130,7 @@ its scores.
 
 ## Process
 
-- **Two machines:** a CPU coordinator and a GPU worker, talking through a LAN hub ([`plans/07`](../plans/07_two_node_protocol.md)).
+- **Two machines:** a CPU coordinator and a GPU worker, exchanging messages and files over a small LAN service.
 - **Cross-review:** 20+ PRs, each reviewed by the other machine. Reviews caught a submission writer that silently
   defaulted every row, leaky CV folds, a training weight derived from the headline set, resume-dependent early stopping,
   an overwritable frozen model choice, and a GiB/GB mix-up in the memory budget.

@@ -147,7 +147,7 @@ def main():
                                       SVC(C=C, gamma="scale", class_weight="balanced", cache_size=2000))
         dcf, svm_m, s, C = fit_sk(svm, sub, ev, feats, [1.0, 10.0], lambda mm, X: mm.decision_function(X))
         models["R1_svm_all"] = (dcf, svm_m, feats)
-        # ponytail: 15k-clip subsample (O(n^2) kernel); all-train SVM only if it ever looks competitive
+        # 15k-clip subsample (O(n^2) kernel); all-train SVM only if it ever looks competitive
         emit("R1_svm_all", ev, s, f"SVM-RBF C={C}, 15k balanced train subsample", results)
 
     # ---- analysis on the full-feature LightGBM

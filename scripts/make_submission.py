@@ -5,11 +5,11 @@
 Reads data/scores/<model>__hgt.parquet (filename, score; higher = more fake), writes submission/<team>_scores.tsv
 in template order ('filename<TAB>cm-score', LF, no BOM), and runs scripts/score.py's validator.
 - Every score filename must be a template filename and every template row must be scored, unless
-  --max-unscored allows some; unscored rows get DEFAULT = 0.3 (docs/scoring.md §4), never the template's 0.006.
+  --max-unscored allows some; unscored rows get DEFAULT = 0.3 (docs/01_challenge_and_scoring.md §4), never the template's 0.006.
 - Probability models write their scores as-is. Margin/logit models need --sigmoid, a fixed monotone map
   (minDCF unchanged). The choice is per model type, never decided from HGT scores.
 - --higher-is-real writes 1 - score: the organizers' scorer reads a higher score as real (ASVspoof direction),
-  the opposite of the brief (docs/scoring.md section 7). Every file sent for scoring must use it.
+  the opposite of the brief (docs/01_challenge_and_scoring.md section 7). Every file sent for scoring must use it.
 - Scores are written with 10 significant digits so rounding doesn't create ties (ties never break in our favour).
   For large logits pass --temperature T (sigmoid(x / T)) so the sigmoid itself doesn't saturate into ties.
 """
@@ -58,7 +58,7 @@ def main():
     ap.add_argument("--sigmoid", action="store_true", help="model outputs margins/logits, not probabilities")
     ap.add_argument("--max-unscored", type=int, default=0)
     ap.add_argument("--higher-is-real", action="store_true",
-                    help="write 1 - score: the organizers' scorer reads higher = real (docs/scoring.md section 7)")
+                    help="write 1 - score: the organizers' scorer reads higher = real (docs/01_challenge_and_scoring.md section 7)")
     ap.add_argument("--temperature", type=float, default=1.0,
                     help="with --sigmoid: sigmoid(x / T). Large logits saturate to exactly 0/1 at 10 digits and tie; size T "
                          "from the model's VALIDATION logit range (never from HGT scores). Rank-preserving, minDCF-neutral.")

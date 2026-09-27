@@ -1,4 +1,4 @@
-"""R4ft (plans/08_ssl_aasist.md): model, sampler, data, training/resume, scoring rules. CPU only, tiny random-init
+"""R4ft: model, sampler, data, training/resume, scoring rules. CPU only, tiny random-init
 front ends (no downloads), synthetic wavs."""
 import json
 import sys
@@ -259,7 +259,7 @@ def world(tmp_path, monkeypatch):
     monkeypatch.setattr(FT, "_kernel32", lambda: K32())
 
     def no_report(*a, **k):
-        raise AssertionError("the gpu node must never call report()")
+        raise AssertionError("scoring must never call report()")
     monkeypatch.setattr(E, "report", no_report)
     monkeypatch.setattr(E, "LEADERBOARD", tmp_path / "leaderboard.md")
     return FT, m, tmp_path, calls
@@ -427,7 +427,7 @@ def test_score_writes_config_first_and_never_reports(world, monkeypatch, capsys)
     assert list(hg.columns) == ["filename", "score"] and sorted(hg.filename) == ["HGT0.wav", "HGT1.wav", "HGT2.wav"]
     assert not (root / "leaderboard.md").exists()
     printed = capsys.readouterr().out
-    assert "hubctl.py put" in printed and "val_testlike" in printed and "combined" in printed
+    assert "wrote:" in printed and "val_testlike" in printed and "combined" in printed
     assert cfg["selected_on"] == "val_testlike combined minDCF" and cfg["forced"] is False
 
 

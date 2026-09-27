@@ -1,4 +1,4 @@
-"""R4ft: end-to-end fine-tuned SSL front end + spoofing back end (plans/08_ssl_aasist.md §2, §3.3).
+"""R4ft: end-to-end fine-tuned SSL front end + spoofing back end (architecture: docs/06_architecture.md).
 
     model = build_model("xlsr_300m", backend="light", max_blocks=12)
     logit = model(wave_batch)            # (B,) spoof logit, higher = fake; waves are prep()'d 16 kHz, 64,000 samples

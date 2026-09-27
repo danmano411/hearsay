@@ -1,4 +1,4 @@
-"""R4ft data (plans/08_ssl_aasist.md §6): class-balanced, source-diverse train batches; val_testlike eval windows + cache.
+"""R4ft data: class-balanced, source-diverse train batches; val_testlike eval windows + cache.
 
 Train: BalancedBatches yields micro-batches of `per_class` bonafide + `per_class` spoof rows of split == "train".
 Within a label, a (source, label) cell is drawn with probability ∝ n_cell^power (power 0.5 = √n) times an optional

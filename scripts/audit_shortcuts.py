@@ -1,4 +1,4 @@
-"""Shortcut audit (plan 01 step 6): can a depth-3 tree on trivial cues separate real from fake?
+"""Shortcut audit: can a depth-3 tree on trivial cues separate real from fake?
 
 Features = hearsay.data.stats.STAT_COLUMNS on the canonical 16 kHz clip (duration, level, silence, bandwidth...).
 Fit on split=train, score on val + test_internal (pooled: the real class is tiny). minDCF well below 0.5 = those
@@ -23,7 +23,7 @@ STATS = PROCESSED / "audit" / "clip_stats.parquet"
 
 def min_dcf(score_spoof, is_spoof, p_spoof=0.05, c_miss=1.0, c_fa=10.0):
     """ASVspoof5 Track-1 normalized minDCF. miss = bonafide rejected, fa = spoof accepted.
-    ponytail: local copy for this audit only; hearsay.metrics (phase 5) is the reference implementation."""
+    local copy for this audit only; hearsay.metrics is the reference implementation."""
     s, y = np.asarray(score_spoof, float), np.asarray(is_spoof, bool)
     thr = np.concatenate([[-np.inf], np.unique(s), [np.inf]])
     p_miss = np.array([(s[~y] >= t).mean() for t in thr])  # bonafide called spoof

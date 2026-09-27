@@ -1,4 +1,4 @@
-"""R3 DataLoader (finetune_aasist.py) and run_aasist.py's gpu-safe path. CPU only, synthetic wavs, a few seconds."""
+"""R3 data loaders (hearsay.models.aasist_data) and run_aasist.py's default path. CPU only, synthetic wavs, a few seconds."""
 import sys
 from pathlib import Path
 
@@ -79,7 +79,7 @@ def test_loader_workers_0_and_2_match(clips):
     assert ev.shape == (len(paths), NB_SAMP)
 
 
-# --- run_aasist.py: the gpu node must never call report() (cpu node = single leaderboard writer) ---------------
+# --- run_aasist.py: without --report it must never call report() (the leaderboard stays untouched) ------------
 
 def _fake_run(monkeypatch, tmp_path):
     import run_aasist as R

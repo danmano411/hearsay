@@ -1,4 +1,4 @@
-"""Plan 10: register public benchmark sets as ordinary training sources -> data/processed/manifests/bench_<set>.parquet.
+"""R6 training data: register public benchmark sets as ordinary training sources -> data/processed/manifests/bench_<set>.parquet.
 
     python scripts/bench_to_manifest.py asvspoof2021_df asvspoof2021_df_b cd_add decro_en
     python scripts/make_splits.py
@@ -17,7 +17,7 @@ REFUSED = ("deepvoice", "keyguard")
 def main(names):
     for name in names:
         if name.startswith(REFUSED):
-            raise SystemExit(f"{name}: held out / derived from test_internal, never a training source (plan 10)")
+            raise SystemExit(f"{name}: held out / derived from test_internal, never a training source")
         b = pd.read_parquet(DATA / "bench" / f"{name}.parquet")
         b["source"] = f"bench_{name}"
         b["generator"] = b.generator.where(b.label == "bonafide", f"bench_{name}_" + b.generator.astype(str))

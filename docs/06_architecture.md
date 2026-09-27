@@ -21,17 +21,17 @@ learning the recording pipeline:
 - On raw audio they could: 0.572.
 - After `prep()` they are near chance: 0.921. That is the result we want.
 
-Source: `reports/data_audit.md`, `reports/r1_classic.md`.
+Source: `reports/01_data_audit.md`, `reports/02_r1_classic.md`.
 
 ## R1: classic features and LightGBM
 ![R1](figures/architecture/r1_classic_lightgbm.svg)
 
 Each clip becomes 228 numbers:
 - 180 describe the spectrum (LFCC and MFCC, plus shape statistics, all below 7 kHz);
-- 48 describe the physiology of speech (`docs/speech_biology.md`).
+- 48 describe the physiology of speech (`docs/05_speech_biology.md`).
 
 LightGBM then builds hundreds of small decision trees, each one correcting the mistakes of the trees before it.
-Headline 0.253. Source: `reports/r1_classic.md`.
+Headline 0.253. Source: `reports/02_r1_classic.md`.
 
 ## R3: AASIST, the organizers' baseline
 ![R3](figures/architecture/r3_aasist.svg)
@@ -78,7 +78,7 @@ what real speech sounds like before it sees any fakes. Its three stages:
 **Fine-tuning end to end** means the transformer's weights are updated too, with smaller learning rates in lower
 layers (chart R6).
 
-**Result:** 9× better than R1, headline 0.0282. Source: `reports/r4ft_xlsr.md`, `src/hearsay/models/ssl_e2e.py`.
+**Result:** 9× better than R1, headline 0.0282. Source: `reports/04_r4ft_xlsr.md`, `src/hearsay/models/ssl_e2e.py`.
 
 ## R5: fusion of R4ft and R1 (first submission, HGT minDCF 0.0584)
 ![R5](figures/architecture/r5_fusion.svg)
@@ -104,7 +104,7 @@ R6 is the R4ft architecture trained again, with two changes:
 - 6,155 more clips from three public corpora.
 
 The chart shows the training loop both XLS-R models used. Training stopped early and kept the step-4,096 checkpoint;
-the reason is recorded in `reports/r6_final.md`. On its own, R6 is weaker than R4ft on our validation set. Its value
+the reason is recorded in `reports/07_r6_and_final_submission.md`. On its own, R6 is weaker than R4ft on our validation set. Its value
 is as a second, differently trained opinion.
 
 ## E5: fusion of R4ft, R6 and R1 (final submission)
@@ -114,5 +114,5 @@ E5 uses the same fusion recipe as R5, with a third input. The weights (6.00 / 3.
 weight: two XLS-R models trained on different data disagree on some clips, and averaging their evidence reduces each
 model's individual mistakes.
 
-E5 was chosen by the rule written before R6 existed (`plans/10_r6_final.md`): it was the only candidate that passed
-both guardrails. Full spec: `data/models/e5/e5_fusion.json`. Source: `reports/r6_final.md`, `scripts/r6_select.py`.
+E5 was chosen by the rule written before R6 existed ([`00_development_log.md`](00_development_log.md), stage 10): it was the only candidate that passed
+both guardrails. Full spec: `data/models/e5/e5_fusion.json`. Source: `reports/07_r6_and_final_submission.md`, `scripts/r6_select.py`.

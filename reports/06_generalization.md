@@ -1,6 +1,6 @@
 # Generalization: public benchmarks and call-audio stress tests
 
-Plan: [`plans/09`](../plans/09_generalization_and_keyguard.md). **Inference only.** The models are the frozen submission
+Stage 8 of the [development log](../docs/00_development_log.md). **Inference only.** The models are the frozen submission
 models; nothing was trained, calibrated, thresholded or selected on any set below. Each model's threshold was fixed
 on `val_testlike` (brief reading: a real voice flagged as fake costs 4×) and applied unchanged, which shows what a
 deployed detector would do. minDCF, by contrast, picks the best threshold per set after the fact.
@@ -11,13 +11,13 @@ is not bit-identical (Spearman 0.998 with the saved scores; `val_testlike` 0.228
 exact objects scored here: the refit R1's `val_testlike` scores, R4ft's frozen scores, and the frozen full-fit R5
 fusion applied to those two (`val_testlike` combined 0.0125).
 
-R4ft was scored on the GPU node (bf16) and spot-checked against CPU fp32 re-scoring: 50 clips, correlation 0.9999,
+R4ft was scored on the GPU (bf16) and spot-checked against CPU fp32 re-scoring: 50 clips, correlation 0.9999,
 max logit gap 1.1 on a ±40 range. Reproduce: `scripts/ingest_bench.py`, `scripts/make_keyguard_sets.py`,
 `scripts/bench_score.py r1|r4ft`, then `scripts/bench_score.py report --sets deepvoice cd_add decro_en
 asvspoof2021_df keyguard_clean keyguard_type20 keyguard_type10 keyguard_type5 keyguard_type0 keyguard_shield_clean
 keyguard_shield_type10` (the default sets leave out `keyguard_*`). Full table: `data/bench/generalization.csv`.
 
-Cells are minDCF **official / brief / combined** (`docs/scoring.md` §2; 0 = perfect, 1 = no better than always
+Cells are minDCF **official / brief / combined** (`docs/01_challenge_and_scoring.md` §2; 0 = perfect, 1 = no better than always
 answering the same). The last column is R5 at its fixed `val_testlike` threshold.
 
 ## 1. Public benchmarks never used in training
@@ -66,7 +66,7 @@ our training. Where the data is new, the picture is: unseen VCC-sourced DF fakes
 familiar LJ vocodings is 0.049, and voice conversion (DeepVoice, 0.231) is the real failure. The brief's expensive
 error, a real voice flagged, stays ≤ 0.5 % everywhere at the fixed threshold; the miss rate is what moves.
 
-## 2. Call-audio stress tests (Hearsay × Keyguard, `docs/keyguard_fusion.md`)
+## 2. Call-audio stress tests (Hearsay × Keyguard)
 
 600 held-out clips (300 real / 300 fake, `test_internal_testlike`). Keystrokes: Keyguard's recorded presses, 5
 keyboards, 3 presses/s, level vs speech power as in Keyguard's `synth.mix`. Shield: Keyguard's DSP shield

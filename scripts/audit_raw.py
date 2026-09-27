@@ -1,6 +1,6 @@
-"""Audit raw audio at its NATIVE rate/format (plan 01 step 1).
+"""Audit raw audio at its NATIVE rate/format.
 
-Writes data/processed/audit/raw_audit.parquet (one row per file) and prints markdown tables for reports/data_audit.md.
+Writes data/processed/audit/raw_audit.parquet (one row per file) and prints markdown tables for reports/01_data_audit.md.
 hgt_test gets a format-only check (sr, channels, duration) — no level/spectral stats (inference-only rule).
 
   python scripts/audit_raw.py [--workers 8]

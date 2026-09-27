@@ -1,8 +1,8 @@
-"""Architecture flowcharts for every rung (docs/architecture.md). Regenerate: python docs/figures/architecture/make_architecture.py
+"""Architecture flowcharts for every rung (docs/06_architecture.md). Regenerate: python docs/figures/architecture/make_architecture.py
 
 Hand-laid SVG, no dependencies. Colour key (same in every chart): grey = data, blue = preprocessing / features,
 teal = trained model part, dashed = frozen pretrained part, amber = fusion / decision, dark = output.
-Numbers come from the code and reports cited in docs/architecture.md.
+Numbers come from the code and reports cited in docs/06_architecture.md.
 """
 from html import escape
 from pathlib import Path

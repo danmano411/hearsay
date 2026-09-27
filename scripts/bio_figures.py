@@ -1,4 +1,4 @@
-"""Per-feature real-vs-fake effect sizes for the bio features + figures for docs/speech_biology.md.
+"""Per-feature real-vs-fake effect sizes for the bio features + figures for docs/05_speech_biology.md.
 
   python scripts/bio_figures.py [--feats data/features/bio_sample.parquet] [--no-audit]
 

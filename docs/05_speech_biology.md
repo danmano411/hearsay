@@ -12,7 +12,7 @@ three questions at each stage:
 
 The last section tests those hypotheses on a 3,000-clip sample. The findings are **preliminary**. They also show that
 several "biological" cues are really cues about which recording pipeline a clip came from. That is the most useful
-result here, and it matters for Phase 6.
+result here, and it matters for Stage 6.
 
 ```mermaid
 flowchart LR
@@ -94,7 +94,7 @@ the full acoustic treatment.
 **Synthesis hypothesis.** Modern end-to-end TTS does *not* factor speech this way. It predicts a mel spectrogram in
 which source and filter are entangled. Physically coupled quantities, such as HNR and spectral tilt, or F0 and H1–H2,
 can therefore drift apart in combinations that no human larynx produces. A single feature may look normal while their
-*joint* distribution does not. That is the argument for feeding these features to a multivariate model (Phase 6)
+*joint* distribution does not. That is the argument for feeding these features to a multivariate model (Stage 6)
 rather than thresholding each one.
 
 ## 4. Articulation and coarticulation: a moving tube with inertia
@@ -229,7 +229,7 @@ treat every channel-like cue with suspicion. See the bandwidth finding in §11.
 ## 11. Preliminary evidence
 
 > **Status: preliminary.** This is a 3,000-clip snapshot taken while Phases 1–3 were still ingesting data (manifests
-> as of 2026-09-25 22:20). The full-corpus extraction is left to Phase 6.
+> as of 2026-09-25 22:20). The full-corpus extraction is left to Stage 6.
 
 ### Setup
 
@@ -332,7 +332,7 @@ other corpus and score a held-out one:
 
 The gap between 0.88 and the leave-one-corpus-out range of 0.43–0.78 is roughly how much of the pooled score is
 "which corpus is this?". This matches the general result that detectors generalise poorly to unseen conditions
-(Müller et al., 2022). **Interpretation for Phase 6:** the bio features are not a standalone detector. Their value is
+(Müller et al., 2022). **Interpretation for Stage 6:** the bio features are not a standalone detector. Their value is
 (a) interpretable, low-dimensional evidence to *fuse* with SSL embeddings, especially the consistent cues above
 (F0 spread, shimmer, spectral balance, modulation spectrum, group delay); and (b) a diagnostic: when a model's score
 correlates with `hf_*`, `pause_floor_db` or near-Nyquist energy, it is probably learning the channel.
@@ -355,7 +355,7 @@ correlates with `hf_*`, `pause_floor_db` or near-Nyquist energy, it is probably 
 python -m pytest tests/test_bio.py                          # synthetic vowel: F0 within 2 %, jitter/HNR ordering, NaN-safety
 python scripts/extract_bio.py --sample 3000 --out data/features/bio_sample.parquet   # ~7 min on 4 workers
 python scripts/bio_figures.py                               # tables + docs/figures/bio_*.png
-python scripts/extract_bio.py --workers 12                  # full corpus -> data/features/bio.parquet (Phase 6)
+python scripts/extract_bio.py --workers 12                  # full corpus -> data/features/bio.parquet (Stage 6)
 ```
 
 `extract_bio(y, sr)` returns a dict with a fixed key set (`bio.FEATURES`, 48 features). Each feature group is computed

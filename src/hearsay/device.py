@@ -9,7 +9,7 @@ def resolve(name="auto"):
         name = "cuda" if torch.cuda.is_available() else "cpu"
     if name.startswith("cuda") and not torch.cuda.is_available():
         raise SystemExit(f"--device {name} requested but torch.cuda.is_available() is False "
-                         f"(torch {torch.__version__}: install a CUDA build, see docs/GPU_HANDOFF.md)")
+                         f"(torch {torch.__version__}: install a CUDA build, e.g. pip install torch --index-url https://download.pytorch.org/whl/cu128)")
     dev = torch.device(name)
     if dev.type == "cuda":
         # Windows (WDDM) lets an over-allocation spill into shared system memory, which runs ~100x slower instead of

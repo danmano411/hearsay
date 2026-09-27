@@ -1,4 +1,4 @@
-"""Generate the Phase-3 synthetic set and its manifest.
+"""Generate the Stage-3 synthetic set and its manifest.
 
 Run with the overlay venv (shared .venv + phonemizer/espeakng-loader/sentencepiece):
   PYTHONPATH=src .venv-sim/Scripts/python scripts/run_sim.py            # all generators, then manifest

@@ -13,7 +13,7 @@ MODELS = {  # short name -> HF id
     "xlsr_300m": "facebook/wav2vec2-xls-r-300m",
     "w2v2_base": "facebook/wav2vec2-base",
 }
-# ponytail: 4 s, not 6 s -- CPU cost is linear in length (0.28 vs 0.59 s/clip for WavLM) and the test median is
+# 4 s, not 6 s -- CPU cost is linear in length (0.28 vs 0.59 s/clip for WavLM) and the test median is
 # 3.4 s, so 4 s is closer to what the heads will see at test time. Longer context only if a GPU appears.
 MAX_SECONDS = 4.0
 SR = 16000

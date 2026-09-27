@@ -1,4 +1,4 @@
-# External data (Phase 2)
+# External data (Stage 2)
 
 **Problem this phase attacks.** The organizer training data is badly lopsided: **242 real clips from one
 speaker (LJ Speech)** against **70,000 fakes** from 10 generators and ~11 voices (DiffSSD). The test set is
@@ -30,7 +30,7 @@ Nothing under `data/` is committed.
 | **total external** | **56,720** | **54,299** | **233** | **126** | | **26.9** |
 
 **Class balance.** The given data is 242 real vs 70,000 fake, so 0.3 % real. With the external data it is
-**56,962 real vs 124,299 fake (31 % real)**. The external part alone is balanced (51 % real). Phase 6 can move the
+**56,962 real vs 124,299 fake (31 % real)**. The external part alone is balanced (51 % real). Stage 6 can move the
 ratio toward the test's ~70 % by subsampling DiffSSD fakes or weighting classes. It no longer has to up-weight 242 clips of one voice.
 
 Key counts behind the shortcut fix:
@@ -53,7 +53,7 @@ Each row can be re-checked with `python scripts/ingest_summary.py`. It asserts t
 | Same voice, fake | `wavefake` (7 vocoders + 1 TTS, all in the LJ voice, same LJ sentence ids) | Matched pairs: identical speaker, text and recording chain, differing only in the synthesis. This directly removes "LJ timbre ⇒ real". |
 | Cloned voices, real | `librispeech`: **all** utterances of the 10 speakers DiffSSD clones (100, 1487, 2061, 3654, 4490, 5448, 6167, 6575, 7995, 8848) | The real side of DiffSSD's voice-cloning generators (XTTS v2, YourTTS, OpenVoice v2, UnitSpeech, PlayHT, ElevenLabs). Without it those 10 voices are *only ever fake*. |
 | Real speaker/channel diversity | `librispeech` (dev/test-clean + 12 utts from each train-clean-360 speaker), `in_the_wild` (celebrity speech from the web), `asvspoof2019_la` (VCTK speakers), `asvspoof5` (MLS, crowdsourced, with codecs), `cvoicefake_en` (Common Voice, consumer mics), `sonar` (LibriTTS), `mlaad_tiny` (M-AILABS audiobooks), `librisevoc` (LibriTTS), `dfadd` (VCTK) | Test reals probably are not all LJ. Many voices, microphones and codecs on the real side force the model to learn artifacts, not identity. |
-| New generator families | ASVspoof 2019 A07–A19, ASVspoof 5 A17–A32, SONAR (OpenAI TTS, VALL-E, VoiceBox, NaturalSpeech 3, …), MLAAD-tiny (64 English systems from 2023–25), DFADD (diffusion / flow matching), LibriSeVoc + CVoiceFake (vocoder resynthesis), In-the-Wild (unknown in-the-wild fakes) | Unseen-generator robustness. Leave-one-generator-out validation (Phase 1/6) needs many generators to hold out. |
+| New generator families | ASVspoof 2019 A07–A19, ASVspoof 5 A17–A32, SONAR (OpenAI TTS, VALL-E, VoiceBox, NaturalSpeech 3, …), MLAAD-tiny (64 English systems from 2023–25), DFADD (diffusion / flow matching), LibriSeVoc + CVoiceFake (vocoder resynthesis), In-the-Wild (unknown in-the-wild fakes) | Unseen-generator robustness. Leave-one-generator-out validation (Stage 1/6) needs many generators to hold out. |
 
 ## 2. Candidate survey
 
@@ -76,11 +76,11 @@ Sizes are for the full upstream release. "Real/fake" counts are upstream counts,
 | Common Voice (EN) | [commonvoice.mozilla.org](https://commonvoice.mozilla.org/) | CC0 | ~80 GB (en) | millions / 0 | – | 48 kHz mp3 | account / gated | MAYBE: covered by CVoiceFake-en reals |
 | VCTK 0.92 | [datashare 10283/3443](https://datashare.ed.ac.uk/handle/10283/3443) | CC BY 4.0 | 10.9 GB | 44k / 0 | – | 48 kHz | open | SKIP: most clips < 3 s; VCTK reals already arrive via ASVspoof 2019 + DFADD |
 | Fake-or-Real (FoR) | [York BIL](https://bil.eecs.yorku.ca/datasets/), [Kaggle](https://www.kaggle.com/datasets/mohammedabdeldayem/the-fake-or-real-dataset) | not stated | ~16 GB (norm) | ~111k / ~87k | DeepVoice 3, Google/Azure/Polly/Baidu TTS (33 voices) | mixed | Kaggle login | MAYBE: no explicit license; owner decision |
-| CodecFake | [HF](https://huggingface.co/datasets/rogertseng/CodecFake) | CC BY 4.0 | 102 GB | VCTK / 700k | codec resynthesis (EnCodec, DAC, SpeechTokenizer, …) | 16 kHz | open | MAYBE: over budget; one shard would add codec-LM artifacts if Phase 6 finds ElevenLabs/codec fakes hard |
+| CodecFake | [HF](https://huggingface.co/datasets/rogertseng/CodecFake) | CC BY 4.0 | 102 GB | VCTK / 700k | codec resynthesis (EnCodec, DAC, SpeechTokenizer, …) | 16 kHz | open | MAYBE: over budget; one shard would add codec-LM artifacts if Stage 6 finds ElevenLabs/codec fakes hard |
 | ASVspoof 2021 DF | [HF](https://huggingface.co/datasets/SpeechAntiSpoofingBenchmarks/ASVspoof2021_DF) | ODbL | 34 GB | 14,869 / 519,059 | 2019 attacks + 100+ vocoders, compression codecs | 16 kHz | open | MAYBE: largely redundant with 2019 LA + ASVspoof 5 |
 | EmoSpoof-TTS | [HF](https://huggingface.co/datasets/SpeechAntiSpoofingBenchmarks/EmoSpoofTTS) | CC BY 4.0 | 3.4 GB | 0 / 36,000 | StyleTTS 2, F5-TTS, CosyVoice (emotional) | 16 kHz | open | MAYBE: spoof-only; adds to the imbalance |
 | ODSS | [HF](https://huggingface.co/datasets/SpeechAntiSpoofingBenchmarks/ODSS) | CC BY-SA 4.0 | 2.6 GB | Hi-Fi TTS etc. / VITS, FastPitch | VITS, FastPitch+HiFi-GAN | 16 kHz | open | MAYBE: 2 generators, 2/3 non-English |
-| MUSAN / RIRs | [openslr 17](https://www.openslr.org/17), [28](https://www.openslr.org/28) | CC BY 4.0 / Apache | 11 GB / 1.3 GB | noise/RIR | – | 16 kHz | open | MAYBE: augmentation is Phase 6's call; the RIR set is small enough to add then |
+| MUSAN / RIRs | [openslr 17](https://www.openslr.org/17), [28](https://www.openslr.org/28) | CC BY 4.0 / Apache | 11 GB / 1.3 GB | noise/RIR | – | 16 kHz | open | MAYBE: augmentation is Stage 6's call; the RIR set is small enough to add then |
 
 ## 3. Method details and deviations
 
@@ -99,7 +99,7 @@ Sizes are for the full upstream release. "Real/fake" counts are upstream counts,
   This matters most for In-the-Wild and ASVspoof 2019, whose clips are often 2–4 s (see "kept" vs "selected" in the logs).
 - **ASVspoof 5**: shards 0, 66, 133, 199 of the 200-shard eval repack. Rows are ordered by utterance id, which is not
   tied to attack, so this is a random ~2 % sample. The ASVspoof 5 codec condition (C01–C11) is kept in `codec_orig`
-  (e.g. `flac;asv5_C08`) so Phase 6 can study codec robustness.
+  (e.g. `flac;asv5_C08`) so Stage 6 can study codec robustness.
 - **Generator naming**: `bonafide` for all reals. Fakes are `<source>_<upstream attack/system id>`, e.g.
   `asvspoof5_A19`, `wavefake_ljspeech_hifiGAN`, `mlaad_f5-tts`. In-the-Wild fakes have no generator label (`in_the_wild_unknown`).
 - **Speaker ids** are upstream ids (LibriSpeech numeric ids like `100` match DiffSSD's `speaker_100` folders;

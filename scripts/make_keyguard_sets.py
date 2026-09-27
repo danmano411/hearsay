@@ -1,4 +1,4 @@
-"""Hearsay x Keyguard probes (plan 09, Part B): does typing noise, or Keyguard's keystroke shield, make real
+"""Hearsay x Keyguard probes (reports/06_generalization.md §2): does typing noise, or Keyguard's keystroke shield, make real
 speech look fake (or fakes look real)?
 
     python scripts/make_keyguard_sets.py --keyguard <path to a keyguard clone> [--n 300]

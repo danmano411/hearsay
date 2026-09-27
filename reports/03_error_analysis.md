@@ -31,7 +31,7 @@ Higher minDCF = that slice is where the errors come from.
 | openvoicev2 | 281 | 0.004 |
 | diffgan_tts (held out) | 500 | 0.000 |
 
-Decisions taken from it: upweight **asvspoof5 reals ×2** in G5 sampling (the only clear outlier); no special weight for
+Decisions taken from it: upweight **asvspoof5 reals ×2** in the R4ft training sampler (the only clear outlier); no special weight for
 LibriSeVoc; success = moving playht / unit_speech and the asvspoof5 real slice.
 
 ## Report-only: R1_lgbm_all_full on `test_internal_testlike` (headline 0.253)
@@ -70,7 +70,7 @@ LibriSeVoc; success = moving playht / unit_speech and the asvspoof5 real slice.
    (PlayHT, UnitSpeech): they are exactly what the challenge brief warns about. Held-out generators stay held out; this is
    the number to move.
 3. **Newest TTS (codec language models) is the frontier.** Few clips, but consistently the hardest. More of them in
-   training (full MLAAD is gated; see `docs/external_data.md`) would be the next data investment.
+   training (full MLAAD is gated; see `docs/03_external_data.md`) would be the next data investment.
 
 Next: the same decision table on `val_testlike` for each GPU rung, to see which model fixes which slice; those
 `val_testlike` slices inform fusion and model choice. Per-rung `test_internal_testlike` tables stay report-only.

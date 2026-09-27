@@ -2,7 +2,7 @@
 
 This page covers how raw audio becomes `data/processed/manifest.parquet`, and how that manifest is split so that
 validation numbers mean something. The audit findings (formats, dropped clips, shortcut cues) are in
-[reports/data_audit.md](../reports/data_audit.md).
+[reports/01_data_audit.md](../reports/01_data_audit.md).
 
 ## Pipeline
 
@@ -13,7 +13,7 @@ data/raw/diffssd, data/raw/lj_real ─ audit_raw.py ──► data/processed/aud
 other phases ───────────────────────────────────────► data/processed/manifests/<source>.parquet
 data/processed/manifests/*.parquet ─ make_splits.py ─► data/processed/manifest.parquet  (+ split columns)
                                    ─ check_manifest.py  (assertions)
-                                   ─ audit_shortcuts.py (trivial-cue tree → reports/data_audit.md)
+                                   ─ audit_shortcuts.py (trivial-cue tree → reports/01_data_audit.md)
 ```
 
 ```bash
@@ -71,7 +71,7 @@ Every source manifest (`data/processed/manifests/<source>.parquet`) has exactly 
 **Leakage unit (`group`).** Rows are grouped by `text_id`. All renderings of one sentence therefore stay in the same
 split: every generator, every cloned speaker, and every accent. This guarantees that no `(speaker, text_id)` pair
 appears in two splits. It also keeps a real LJ recording and any LJ-voice fake of the same sentence together.
-LJSpeech ids are normalized first, so `LJ001-0001` (phase 3's sim fakes) and `ljspeech:LJ001-0001` (our real
+LJSpeech ids are normalized first, so `LJ001-0001` (stage 3's sim fakes) and `ljspeech:LJ001-0001` (our real
 clips) fall in one group.
 
 Some external corpora use a per-file utterance id as `text_id`: `in_the_wild`, `asvspoof2019_la`, `asvspoof5` and

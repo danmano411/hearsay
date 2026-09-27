@@ -1,7 +1,7 @@
 """Deterministic, leakage-safe split assignment over the union of all source manifests.
 
 Every rule is a pure function of row content (hashes, no RNG), so adding a new source never moves existing rows
-between splits, and re-running gives identical output. See docs/dataset.md for the rationale.
+between splits, and re-running gives identical output. See docs/02_dataset.md for the rationale.
 """
 import hashlib
 

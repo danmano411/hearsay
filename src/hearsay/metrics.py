@@ -1,4 +1,4 @@
-"""Local re-implementation of the organizers' ASVspoof5 Track-1 scorer (see docs/scoring.md).
+"""Local re-implementation of the organizers' ASVspoof5 Track-1 scorer (see docs/01_challenge_and_scoring.md).
 
 Scores are in OUR submission direction: higher = more likely fake (0 = real, 1 = synthetic).
 Labels: 'bonafide'/'spoof' strings, or ints/bools with 1 = spoof (fake), 0 = bonafide (real).

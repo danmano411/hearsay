@@ -1,4 +1,4 @@
-"""Score the frozen models on the public benchmark sets (plan 09, Part A). Inference only: nothing here is fit,
+"""Score the frozen models on the public benchmark sets (reports/06_generalization.md §1). Inference only: nothing here is fit,
 calibrated or selected on benchmark data.
 
     python scripts/bench_score.py r1   [--sets ...]   # refits R1_lgbm_all_full exactly (once, saved), then scores
@@ -113,7 +113,7 @@ def r3(sets):
 
 # -------------------------------------------------------------------------------------------------------- R4ft
 def r4ft(sets, threads, device="cpu", name=None):
-    """Any finetune_ssl run under data/models/r4ft_xlsr/<name> (default R4ft_xlsr_light; plan 10: R6_xlsr_light)."""
+    """Any finetune_ssl run under data/models/r4ft_xlsr/<name> (default R4ft_xlsr_light; R6_xlsr_light for R6)."""
     name_ = name or NAMES["r4ft"]
     import torch
     import finetune_ssl as fs

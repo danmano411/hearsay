@@ -1,4 +1,4 @@
-"""Phase-1 check: assert the combined manifest is sound.
+"""Stage-1 check: assert the combined manifest is sound.
 
 - every path exists and is 16 kHz mono PCM16 WAV, >= 3.0 s
 - labels in {bonafide, spoof}; no duplicate paths

@@ -4,8 +4,8 @@ LFCC (linear triangular filterbank cepstra, the ASVspoof baseline front end) and
 summarized by mean/std over frames; plus spectral centroid/bandwidth/rolloff/flatness/contrast stats.
 
 Everything is computed on the 0-7 kHz band only. prep() low-passes at 7 kHz, but a 10th-order Butterworth still
-leaves ~-20 dB of the 7-8 kHz band, which is exactly where the resampler shortcut lives (reports/data_audit.md).
-ponytail: CQCC skipped (CQT is ~10x the cost of an STFT here); LFCC covers the same "linear HF resolution" idea.
+leaves ~-20 dB of the 7-8 kHz band, which is exactly where the resampler shortcut lives (reports/01_data_audit.md).
+CQCC skipped (CQT is ~10x the cost of an STFT here); LFCC covers the same "linear HF resolution" idea.
 """
 import librosa
 import numpy as np

@@ -1,4 +1,4 @@
-"""Clean the challenge-provided data (DiffSSD + lj_real) into canonical clips (plan 01 steps 2-4).
+"""Clean the challenge-provided data (DiffSSD + lj_real) into canonical clips.
 
 decode -> mono -> 16 kHz (soxr_hq) -> PCM16 WAV under data/processed/<source>/...; no trimming, no loudness norm.
 Drops: undecodable/empty, < 3.0 s, exact PCM duplicates (first path in sorted order is kept).
