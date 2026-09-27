@@ -53,7 +53,7 @@ N_HGT = 1671
 OUT = DATA / "models" / "r4ft_xlsr"
 # args that define the model/optimizer layout: a resume or a score with different values would be silently wrong
 ARCH = ("model", "backend", "max_blocks", "freeze_blocks", "micro_batch", "accum")
-WATCH = ("asvspoof5", "asvspoof2019_la", "playht", "unit_speech")  # plan §7 watch list (val_testlike slices)
+WATCH = ("asvspoof5", "asvspoof2019_la", "playht", "unit_speech")  # hardest val_testlike slices, printed at every eval
 
 
 def parse(argv=None):

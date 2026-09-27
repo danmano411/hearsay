@@ -68,7 +68,6 @@ PYTHONPATH=src python scripts/finetune_ssl.py score --device cuda --hgt         
 3. Evals run inside `fork_rng`, because HF draws `torch.rand` per layer even in eval mode. Without it, an eval or a
    resume would change the training stream.
 4. The back-end LR stays constant through both warm-ups and then follows the cosine.
-5. The hub heartbeat is opt-in (`--heartbeat`).
 
 Two more points about this run:
 

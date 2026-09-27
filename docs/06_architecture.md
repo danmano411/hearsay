@@ -1,6 +1,6 @@
 # Model architectures, rung by rung
 
-One flowchart per model. The colours mean the same thing in every chart:
+One flowchart for the data and one per model. The colours mean the same thing in every chart:
 
 | colour | meaning |
 |---|---|
@@ -12,6 +12,20 @@ One flowchart per model. The colours mean the same thing in every chart:
 | dark | the output |
 
 Regenerate the charts with `python docs/figures/architecture/make_architecture.py`.
+
+## Data in and out
+![Data pipeline](figures/architecture/data_pipeline.svg)
+
+Every clip, whatever its source, goes through the same steps:
+1. **Canonical clip.** Decoded, mixed to mono, resampled to 16 kHz and saved as 16-bit WAV; clips under 3 s are
+   dropped. Each clip gets one manifest row (label, source, generator, speaker, text, licence).
+2. **Grouped splits.** A speaker saying a sentence never appears in two splits, so validation never hears a
+   recording it trained on. Three DiffSSD generators are never trained on at all.
+3. **Augmentation (training only)**, identical for real and fake so it cannot become a cue.
+4. **`prep()`** for every clip, including the test clips: this removes the recording-chain shortcuts found in the
+   data audit.
+
+Sources: `docs/02_dataset.md`, `docs/03_external_data.md`, `src/hearsay/preprocess.py`.
 
 ## R0: trivial cues
 ![R0](figures/architecture/r0_trivial_cues.svg)
@@ -104,10 +118,10 @@ R6 is the R4ft architecture trained again, with two changes:
 - 6,155 more clips from three public corpora.
 
 The chart shows the training loop both XLS-R models used. Training stopped early and kept the step-4,096 checkpoint;
-the reason is recorded in `reports/07_r6_and_final_submission.md`. On its own, R6 is weaker than R4ft on our validation set. Its value
+the reason is recorded in `reports/07_r6_and_e5.md`. On its own, R6 is weaker than R4ft on our validation set. Its value
 is as a second, differently trained opinion.
 
-## E5: fusion of R4ft, R6 and R1 (final submission)
+## E5: fusion of R4ft, R6 and R1 (previous final; used by CallGuard)
 ![E5](figures/architecture/e5_fusion.svg)
 
 E5 uses the same fusion recipe as R5, with a third input. The weights (6.00 / 3.92 / 1.69) show R6 carries real
@@ -115,4 +129,24 @@ weight: two XLS-R models trained on different data disagree on some clips, and a
 model's individual mistakes.
 
 E5 was chosen by the rule written before R6 existed ([`00_development_log.md`](00_development_log.md), stage 10): it was the only candidate that passed
-both guardrails. Full spec: `data/models/e5/e5_fusion.json`. Source: `reports/07_r6_and_final_submission.md`, `scripts/r6_select.py`.
+both guardrails. Full spec: `data/models/e5/e5_fusion.json`. Source: `reports/07_r6_and_e5.md`, `scripts/r6_select.py`.
+
+## R7a: XLS-R with RawBoost
+
+R7a is the R4ft network and training loop (charts R4ft and R6) with one addition: **RawBoost** (Tak et al., ICASSP
+2022). Before the usual augmentation, 60 % of training clips get simulated channel damage, one of:
+- **convolutive noise**: random band filters and mild non-linear distortion, like a cheap microphone or phone line;
+- **impulsive noise**: random clicks tied to the signal;
+- **coloured background noise** at 10–40 dB SNR;
+- or two or three of these in series.
+
+The model then cannot rely on a clean recording chain. It trained for 14,336 steps (early stop); the best checkpoint
+is step 10,240. It is the best single model: 0.0207 on the held-out headline set (R4ft 0.0282).
+Source: `reports/08_r7_rawboost_and_final.md`, `src/hearsay/preprocess.py` (`rawboost`).
+
+## E7: fusion of R4ft, R6, R7a and R1 (final submission)
+![E7](figures/architecture/e7_fusion.svg)
+
+The same fusion recipe with four inputs. R7a gets the largest weight (4.74): its channel-robust view adds the most
+information the other models lack. Chosen by the Stage 11 rule, written before any R7 result: validation 0.0088
+(E5 0.0099), DeepVoice 0.1330 (E5 0.1515). Source: `reports/08_r7_rawboost_and_final.md`, `scripts/r7_select.py`.

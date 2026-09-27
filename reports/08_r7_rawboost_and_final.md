@@ -33,3 +33,18 @@ R7a is the largest weight.
 checkpoint. The rule uses each model's best checkpoint by its own training recipe, so the final one is used; the two
 files differ on 4 of 1,671 clips at 0.5 (Spearman 0.993). E7 vs E5: 10 clips switch sides, Spearman 0.990.
 Nothing was chosen from the HGT audio or the organizers' feedback.
+
+## Report-only, scored once after the choice
+`test_internal_testlike`, official settings (Pspoof 0.3, Cfa 4):
+
+| model | minDCF | EER |
+|---|---|---|
+| **E7 (final)** | **0.0132** | **0.54 %** |
+| R5 | 0.0138 | 0.54 % |
+| R7a | 0.0149 | 0.61 % |
+| E5 | 0.0154 | 0.69 % |
+| R4ft | 0.0192 | 0.76 % |
+| R6 | 0.0236 | 0.89 % |
+
+E7 is the best system on this set too, and R7a is the best single model. The HGT test has so far been about 4× harder
+than this set (R5: 0.0138 here, 0.0584 official), so expect E7's official score to be well above 0.0132.

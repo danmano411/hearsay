@@ -108,7 +108,7 @@ R1 improved from 0.305 to 0.253 when trained on the full training set (26 Sep, 0
 - **When:** plan about 15:45; rule revised about 16:10, before any R6 training; R6 selected 21:18. Submission deadline 27 Sep, 08:00; R5 would stay the final if R6 had not finished by then.
 - **Question:** Can more diverse training data beat 0.0584, using only our own data to choose?
 - **Rule fixed in advance (revised version):** R6 = the exact R4ft recipe with seed 1, plus ASVspoof 2021 DF, CD-ADD and DECRO-en as training sources. DeepVoice is never trained on. Metric: official minDCF (Pspoof 0.3, Cmiss 1, Cfa 4). Guardrails relative to R5: `val_testlike` ≤ R5 + 0.003 (fusions cross-fitted) and DeepVoice ≤ R5 + 0.02. Preference among passing candidates: E5 > E > R6, except E if E5's `val_testlike` is worse than E's by more than 0.002. If none passes, the final stays R5.
-- **Outcome** ([reports/07_r6_and_final_submission.md](../reports/07_r6_and_final_submission.md)):
+- **Outcome** ([reports/07_r6_and_e5.md](../reports/07_r6_and_e5.md)):
 
 | candidate | val_testlike | DeepVoice | passes |
 |---|---|---|---|

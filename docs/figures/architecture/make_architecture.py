@@ -220,13 +220,13 @@ def r6():
 def fusion(name, title, subtitle, inputs, weights_line, intercept, temp, h=740):
     c = Chart(title, subtitle, h)
     n = len(inputs)
-    bw, gap = (260, 30) if n == 3 else (360, 60)
+    bw, gap = {2: (360, 60), 3: (260, 30), 4: (196, 12)}[n]
     x0 = (W - (n * bw + (n - 1) * gap)) / 2
     for i, (key, t, lines, tr) in enumerate(inputs):
         x = x0 + i * (bw + gap)
         c.box(key, x, 76, bw, 80, t, lines, "model")
         c.box(key + "_t", x, 186, bw, 62, "transform", [tr], "pre")
-        c.box(key + "_z", x, 278, bw, 62, "standardize", ["z = (x − μ) / σ, from val_testlike"], "pre")
+        c.box(key + "_z", x, 278, bw, 62, "standardize", ["z = (x − μ) / σ" + (", from val_testlike" if n < 4 else "")], "pre")
         c.arrow(key, key + "_t")
         c.arrow(key + "_t", key + "_z")
     c.box("lr", 150, 380, 600, 94, "Logistic regression (the fusion)",
@@ -243,19 +243,82 @@ def fusion(name, title, subtitle, inputs, weights_line, intercept, temp, h=740):
     c.save(name)
 
 
+def data_io():
+    c = Chart("Data in and out: what was given, what we collected, how every clip is prepared",
+              "Counts are clips after cleaning (English, ≥ 3 s). The 1,671 HGT test clips are only ever scored.", 1060)
+    cols = [("given", "Given by the organizers", ["DiffSSD: 69,450 fakes,", "10 generators", "242 LJSpeech reals",
+                                                   "1,671 HGT test clips", "AASIST weights + scorer"], "data"),
+            ("web", "Collected online (11 corpora)", ["56,720 real / 54,299 fake", "LJSpeech, LibriSpeech,",
+                                                         "WaveFake, In-the-Wild,", "ASVspoof 2019 LA + 5,",
+                                                         "LibriSeVoc, SONAR, DFADD,", "MLAAD-tiny, CVoiceFake"], "data"),
+            ("bench", "Public benchmarks", ["R6 on: 6,155 clips from", "ASVspoof 2021 DF, CD-ADD,",
+                                             "DECRO-en (trained on)", "DeepVoice: 2,114 clips,", "test only, never trained"], "data"),
+            ("sim", "Made by us", ["Simulator: 5,204 fakes", "copy-synthesis vocoders", "(HiFi-GAN, Griffin-Lim …)",
+                                   "+ open TTS (VITS, MMS,", "SpeechT5) in LJ and", "LibriSpeech voices"], "data")]
+    for i, (key, t, lines, kind) in enumerate(cols):
+        c.box(key, 20 + i * 218, 76, 206, 140, t, lines, kind)
+    c.box("can", 150, 256, 600, 78, "Canonical clip  (clean_given.py, ingest_*.py, run_sim.py)",
+          ["decode any format → mono → resample to 16 kHz → PCM16 WAV · drop clips < 3 s",
+           "one manifest row per clip: label, source, generator, speaker, text id, licence"], "pre")
+    for i, (key, *_) in enumerate(cols):
+        c.arrow(key, "can", dx_b=(i - 1.5) * 120)
+    c.box("man", 150, 364, 600, 62, "Manifest + grouped splits  (make_splits.py): 193,585 clips",
+          ["a speaker + text never spans two splits · frozen eval subsets in splits/"], "pre")
+    c.arrow("can", "man")
+    sp = [("tr", "train", ["141,591 clips"]), ("va", "val", ["19,328 · val_testlike", "8,963 (70/30 mix)"]),
+          ("te", "test_internal", ["20,676 · testlike 9,747", "report-only headline"]),
+          ("ex", "excluded", ["11,990 fakes of 3 held-", "out DiffSSD generators"])]
+    for i, (key, t, lines) in enumerate(sp):
+        c.box(key, 20 + i * 218, 456, 206, 74, t, lines, "data")
+        c.arrow("man", key, dx_a=(i - 1.5) * 120)
+    c.box("aug", 20, 570, 424, 94, "Training clips only: augment()",
+          ["RawBoost channel noise 60 % (R7a only)", "then MP3 round trip 25 % · noise 15–40 dB SNR 20 %",
+           "· resampler round trip 15 % (same for real and fake)"], "pre")
+    c.box("noaug", 456, 570, 424, 94, "Validation, test and HGT clips: no augmentation",
+          ["the 1,671 HGT clips join here, straight from the", "canonical step; they are never in the manifest",
+           "and never used to choose anything"], "pre")
+    c.arrow("tr", "aug")
+    c.arrow("va", "noaug", dx_b=-100)
+    c.arrow("te", "noaug", dx_b=100)
+    c.box("prep", 150, 700, 600, 62, "prep()  (every clip, train and test)",
+          ["DC removal → trim silence (40 dB) → 7 kHz low-pass (Butterworth) → RMS normalize to 0.05"], "pre")
+    c.arrow("aug", "prep", dx_b=-150)
+    c.arrow("noaug", "prep", dx_b=150)
+    c.box("f1", 20, 796, 424, 62, "R1 input: 228 features on a 3–4 s crop",
+          ["LFCC / MFCC / spectral shape 0–7 kHz + 48 biology features"], "pre")
+    c.box("f2", 456, 796, 424, 62, "XLS-R input (R4ft, R6, R7a): 4 s windows",
+          ["train: random crop · score: up to 3 windows, averaged"], "pre")
+    c.arrow("prep", "f1", dx_a=-150)
+    c.arrow("prep", "f2", dx_a=150)
+    c.box("e7", 150, 892, 600, 62, "Four models → E7 logistic-regression fusion",
+          ["fit on val_testlike only (e7_fusion.svg)"], "fuse")
+    c.arrow("f1", "e7", dx_b=-150)
+    c.arrow("f2", "e7", dx_b=150)
+    c.box("o", 250, 980, 400, 40, "submission .tsv: 1,671 scores, higher = real", [], "out")
+    c.arrow("e7", "o")
+    c.save("data_pipeline")
+
+
 def main():
-    r0(); r1(); r3(); r4ft(); r6()
+    r0(); r1(); r3(); r4ft(); r6(); data_io()
     fusion("r5_fusion", "R5 · fusion of R4ft and R1 (first submission: HGT minDCF 0.0584)",
            "Each model gives a score; a logistic regression learns how much to trust each one.",
            [("a", "R4ft: XLS-R, win3", ["logit, higher = fake", "(r4ft_xlsr.svg)"], "margin: used as-is"),
             ("b", "R1: LightGBM", ["p(fake) in [0, 1]", "(r1_classic_lightgbm.svg)"], "logit: log(p / (1 − p))")],
            "8.82 × z(R4ft) + 1.99 × z(R1)   (μ, σ: R4ft −4.83, 16.73 · R1 −0.46, 6.13)", "−1.02", 8)
-    fusion("e5_fusion", "E5 · fusion of R4ft, R6 and R1 (final submission)",
-           "Two independently trained XLS-R models plus the classic model; chosen by the pre-registered plan-10 rule.",
+    fusion("e5_fusion", "E5 · fusion of R4ft, R6 and R1 (previous final; the model CallGuard uses)",
+           "Two independently trained XLS-R models plus the classic model; chosen by the pre-registered Stage 10 rule.",
            [("a", "R4ft: XLS-R, win3", ["logit, higher = fake", "seed 0, original data"], "margin: as-is"),
             ("b", "R6: XLS-R, win3", ["logit, higher = fake", "seed 1, + 6,155 clips"], "margin: as-is"),
             ("c", "R1: LightGBM (refit)", ["p(fake) in [0, 1]", "228 features"], "logit: log(p / (1 − p))")],
            "6.00 × z(R4ft) + 3.92 × z(R6) + 1.69 × z(R1)", "−1.31", 7)
+    fusion("e7_fusion", "E7 · fusion of R4ft, R6, R7a and R1 (final submission)",
+           "Three XLS-R models (one trained with RawBoost channel noise) plus the classic model; Stage 11 rule.",
+           [("a", "R4ft: XLS-R", ["seed 0, original data", "logit, higher = fake"], "margin: as-is"),
+            ("b", "R6: XLS-R", ["seed 1, + 6,155 clips", "logit, higher = fake"], "margin: as-is"),
+            ("c", "R7a: XLS-R + RawBoost", ["seed 2, RawBoost 60 %", "best step 10,240"], "margin: as-is"),
+            ("d", "R1: LightGBM (refit)", ["p(fake), 228 features", "logit-transformed"], "logit(p)")],
+           "3.93 × z(R4ft) + 2.07 × z(R6) + 4.74 × z(R7a) + 1.47 × z(R1)", "−1.19", 7)
     print("wrote", sorted(p.name for p in OUT.glob("*.svg")))
 
 

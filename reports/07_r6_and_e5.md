@@ -1,6 +1,6 @@
-# R6 and the final submission
+# R6 and E5
 
-**Final submission: E5 = R4ft + R6 + R1 (LR fusion)**, chosen by the rule written before any R6 result existed
+**E5 = R4ft + R6 + R1 (LR fusion)** was the final submission until E7 replaced it ([report 08](08_r7_rawboost_and_final.md)). It was chosen by the rule written before any R6 result existed
 ([development log](../docs/00_development_log.md), stage 10). File: `submission/HearsayScoreKey4GeorgiaMellon_FINAL.tsv`. It is written in the scorer's
 direction (**higher = real**), with 1,671 rows in template order, all distinct, and `scripts/score.py validate`
 returns OK. Its rank correlation with the already-scored R5 file is 0.989. The organizers keep the better of the
@@ -30,7 +30,7 @@ Validation curve (val_testlike combined, centre window; R4ft at the same step in
 ### Deviation from the plan (recorded as it happened)
 The plan says to train until early stopping. That didn't happen, for three reasons:
 - The GPU was shared with another project's training runs that evening.
-- Claude Code's low-memory safeguard on the GPU laptop stopped R6 twice (19:32 and 20:20), both times at step
+- The GPU laptop's low-memory safeguard stopped R6 twice (19:32 and 20:20), both times at step
   ~7,150, while early stopping stood at 2 of 4 evaluations without improvement.
 - The owner chose to score the best checkpoint (step 4,096) without the last two evaluations.
 

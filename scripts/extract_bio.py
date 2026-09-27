@@ -6,7 +6,7 @@ Manifest resolution: --manifest PATH > data/processed/manifest.parquet > data/pr
 Resumable: paths already in the output parquet are skipped; output is rewritten every --chunk clips.
 
   python scripts/extract_bio.py --sample 3000 --out data/features/bio_sample.parquet   # stage-4 validation sample
-  python scripts/extract_bio.py --workers 12            # full corpus, later
+  python scripts/extract_bio.py --workers 12            # full corpus
 """
 import argparse
 import multiprocessing as mp

@@ -1,156 +1,211 @@
-# HEARSAY — telling real speech from synthetic speech
+# HEARSAY: telling real speech from synthetic speech
 
-HackGT 2026 · NSA "HEARSAY" challenge. Score each of 1,671 test clips from **0.0 (confident real)** to **1.0 (confident
-synthetic)**. The metric is the organizers' ASVspoof 5 Track-1 **minDCF** (lower is better; 0 = perfect, 1 = trivial).
+HackGT 2026 · NSA "HEARSAY" challenge. Given 1,671 English test clips, score each one for how likely it is to be
+real human speech or machine-generated (text-to-speech or voice cloning). The organizers rank teams by the ASVspoof 5
+**minDCF**: a cost where missed fakes and false alarms are weighted, and 0 is perfect and 1 is no better than giving
+every clip the same answer. Their scorer uses Pspoof 0.3, Cmiss 1, Cfa 4 and reads a **higher score as real**.
 
-**Start here:** [`docs/00_development_log.md`](docs/00_development_log.md) (every stage, the rules fixed before results, and what happened) · **Architectures:** [`docs/06_architecture.md`](docs/06_architecture.md) · **All results:** [`reports/leaderboard.md`](reports/leaderboard.md)
+## Results
 
-## Where we are
-
-**Official score on the HGT test set: minDCF 0.0584, EER 2.5 %** (organizers' scorer: Pspoof 0.3, Cfa 4, higher
-score = real, so submissions are written flipped; see [`docs/01_challenge_and_scoring.md`](docs/01_challenge_and_scoring.md) §7). The submitted system
-is **R5**: an XLS-R-300M model fine-tuned end to end, fused with a classic-feature + speech-biology model. Full story:
-[`reports/05_r5_submission_and_official_score.md`](reports/05_r5_submission_and_official_score.md). How far it transfers to public benchmarks it never saw:
-[`reports/06_generalization.md`](reports/06_generalization.md).
-
-Our own headline = combined minDCF on `test_internal_testlike`: 9,747 held-out clips at the test's ~70/30 real/fake mix.
-About half its fakes (1,434 of 2,924) come from three generators held out of training entirely. It is frozen, and
-nothing is ever tuned on it. The table below is the ladder up to R1; the final rungs are in `reports/05_r5_submission_and_official_score.md`
-(R4ft 0.0282, R5 0.0218).
-
-| model | what it is | headline |
+| submission | system | HGT test (official) |
 |---|---|---|
-| R0 raw → after `prep()` | LightGBM on 9 trivial cues (duration, silence, level, bandwidth) | 0.542 → 0.921 |
-| R1 | LightGBM on 228 spectral + speech-biology features, full train set | **0.253** |
-| R5 (smoke) | LR fusion of R1's spectral-only and biology-only models ([`scripts/fuse.py`](scripts/fuse.py)) | 0.260 |
-| **R4ft** | XLS-R-300M (12 blocks) fine-tuned end to end + light back end ([report](reports/04_r4ft_xlsr.md)) | **0.0282** |
-| **R5 (submitted)** | LR fusion of R4ft + R1 | **0.0218** (optimistic; picked after seeing it) |
+| initial | **R5**: fine-tuned XLS-R + classic features | **minDCF 0.0584, EER 2.5 %** |
+| final | **E7**: three fine-tuned XLS-R models + classic features | pending (the organizers keep the better of the two) |
 
-## The approach in one picture (planned pipeline; see the table above for what has run)
+On our own held-out set (`test_internal_testlike`: 9,747 clips at the test's 70/30 real/fake mix, with half its fakes
+from three generators never trained on; same scorer settings), each step up the ladder:
 
-```mermaid
-flowchart LR
-  subgraph Data
-    A[Challenge data<br/>DiffSSD 70k fakes<br/>242 LJ reals] --> C[Clean + resample<br/>16 kHz mono]
-    B[11 external corpora<br/>57k reals, 54k fakes] --> C
-    S[Own TTS sim<br/>5.2k fakes] --> C
-    C --> M[Manifest + grouped splits<br/>185,915 clips<br/>frozen eval subsets]
-  end
-  subgraph Model input
-    M --> P["prep(): DC, trim,<br/>7 kHz low-pass, RMS"]
-    P --> G["augment(): mp3 / noise /<br/>resampler, both classes"]
-  end
-  subgraph Rungs
-    G --> R1[R1 classic ML<br/>LFCC/MFCC + biology]
-    G --> R3[R3 AASIST]
-    G --> R4[R4 SSL<br/>WavLM / XLS-R]
-    R1 & R3 & R4 --> R5[R5 LR fusion<br/>fit on val_testlike]
-  end
-  R5 --> T[1,671 HGT clips<br/>inference only] --> O[submission TSV]
-```
+| model | what it is | minDCF | EER |
+|---|---|---|---|
+| R0 | LightGBM on 9 trivial cues (length, silence, level, bandwidth) after cleanup | 0.853 | 34.0 % |
+| R3 | the organizers' pretrained AASIST, used as-is | 0.867 | 32.5 % |
+| R1 | LightGBM on 228 spectral + speech-biology features | 0.169 | 6.6 % |
+| R4ft | XLS-R-300M speech model, fine-tuned end to end | 0.0192 | 0.76 % |
+| R6 | R4ft retrained: new seed, 6,155 more clips | 0.0236 | 0.89 % |
+| R7a | R4ft retrained with RawBoost channel-noise augmentation | 0.0149 | 0.61 % |
+| R5 | fusion of R4ft + R1 (initial submission) | 0.0138 | 0.54 % |
+| E5 | fusion of R4ft + R6 + R1 | 0.0154 | 0.69 % |
+| **E7** | **fusion of R4ft + R6 + R7a + R1 (final submission)** | **0.0132** | **0.54 %** |
 
-## What we learned (the short version)
+The HGT test is harder than anything we could hold out (R5: 0.0138 here, 0.0584 official), because its speakers,
+recording chains and generators differ from ours.
 
-1. **The given data has a trap.** On the given data alone, a depth-3 tree on trivial cues (bandwidth, silence, level)
-   separated real from fake *perfectly*. One cue is the organizers' 242 real clips keeping energy up to 8 kHz, which
-   properly resampled clips lack. `prep()` (DC removal, silence trim, 7 kHz low-pass, RMS normalization) plus 0–7 kHz
-   features neutralize these cues: a trivial-cue LightGBM goes from 0.54 on raw audio to 0.92 (near chance) after
-   `prep()`. See [`reports/01_data_audit.md`](reports/01_data_audit.md).
-2. **One real speaker is not "real speech".** 242 clips of one voice against 70,000 diverse fakes teaches "LJ = real".
-   We added 57k real clips from 10 corpora (including the LibriSpeech speakers DiffSSD clones) and LJ-voice fakes.
-   See [`docs/03_external_data.md`](docs/03_external_data.md).
-3. **Biology helps, modestly.** 48 physiology-motivated features (jitter, shimmer, HNR, formant dynamics, micro-prosody)
-   are weak alone but add to spectral features. See [`docs/05_speech_biology.md`](docs/05_speech_biology.md).
-4. **Unseen generators are the real test.** Errors concentrate on two of the three held-out generators (PlayHT,
-   UnitSpeech; the third, DiffGAN-TTS, is easy) and on real corpora with unusual recording chains (ASVspoof 5 reals). See [`reports/03_error_analysis.md`](reports/03_error_analysis.md).
-5. **The scorer disagrees with the brief** about which error costs 4×. We report both readings everywhere. See
-   [`docs/01_challenge_and_scoring.md`](docs/01_challenge_and_scoring.md).
+## Data: what went in, and how every clip is prepared
 
-## Read more
+![Data pipeline](docs/figures/architecture/data_pipeline.svg)
+
+- **Given:** 69,450 DiffSSD fakes from 10 generators, but only 242 real clips, all of one speaker (LJSpeech).
+  A model trained on that alone learns "this voice = real".
+- **Collected online:** 11 open corpora, 56,720 real and 54,299 fake clips (233 h), chosen to add real speakers,
+  microphones and codecs, and more generator families. Later, 6,155 clips from three public benchmarks.
+- **Made by us:** 5,204 fakes from a small synthesis simulator (vocoder copy-synthesis and open TTS models),
+  including the given real speaker's voice.
+- **Splits:** 193,585 clips, grouped so a speaker saying a sentence never lands in two splits. Three DiffSSD
+  generators are never trained on, so validation measures unseen generators.
+- **Preparation:** every clip is resampled to 16 kHz mono; `prep()` then removes DC, trims silence, low-passes at
+  7 kHz and normalizes loudness. Training clips are also augmented (codec, noise, resampling, and RawBoost for R7a)
+  the same way for both classes.
+- **The HGT test clips** are only ever scored. Nothing was fit on them or chosen from their results.
+
+## The final model: E7
+
+![E7 fusion](docs/figures/architecture/e7_fusion.svg)
+
+1. **Three XLS-R models** (R4ft, R6, R7a). XLS-R-300M is a speech network pretrained without labels on 436k hours in
+   128 languages. We keep its first 12 of 24 transformer blocks, add a small attention-pooling head, and fine-tune
+   the whole thing to output one "fake" score per 4-second window (up to 3 windows per clip, averaged). The three
+   differ in random seed, training data and augmentation, so they make different mistakes.
+2. **One classic model** (R1): LightGBM on 228 hand-made features, 180 spectral and 48 describing the physiology
+   of speech (pitch jitter, formant motion, breathing).
+3. **Fusion:** each score is standardized, and a logistic regression fit on the validation set learns how much to
+   trust each model. R7a gets the largest weight.
+4. **Output:** the fused score goes through a sigmoid and is written as `1 − p`, because the scorer reads higher as
+   real.
+
+Charts for every model (R0 to E7): [`docs/06_architecture.md`](docs/06_architecture.md).
+
+## What we learned
+
+1. **The given data has a shortcut.** A depth-3 tree on trivial cues separated the given real clips from the fakes
+   perfectly, because the 242 real clips keep energy up to 8 kHz and the fakes do not. `prep()` and 0–7 kHz features
+   remove it: the same cues drop to near chance (0.92 minDCF). [`reports/01_data_audit.md`](reports/01_data_audit.md)
+2. **One real speaker is not "real speech".** External reals, including the exact LibriSpeech speakers DiffSSD
+   clones, took reals from 0.3 % to 31 % of the data. [`docs/03_external_data.md`](docs/03_external_data.md)
+3. **Pretrained speech models beat hand-made features by 9×.** Fine-tuning XLS-R fixed the two failure modes of the
+   classic model: unseen generators and real speech from unusual recording chains.
+   [`reports/03_error_analysis.md`](reports/03_error_analysis.md), [`reports/04_r4ft_xlsr.md`](reports/04_r4ft_xlsr.md)
+4. **Channel robustness matters most for the test.** RawBoost (simulated phone lines, cheap microphones, clicks and
+   background noise) made R7a the best single model on both validation and the held-out set, and it carries the
+   most weight in E7.
+   [`reports/08_r7_rawboost_and_final.md`](reports/08_r7_rawboost_and_final.md)
+5. **The brief and the scorer disagree** on score direction and on which error costs 4×. Our first file followed the
+   brief and scored 1.0; the flipped file scored 0.0584. [`docs/01_challenge_and_scoring.md`](docs/01_challenge_and_scoring.md)
+6. **Voice conversion is the open weakness.** On the DeepVoice benchmark (celebrity voice conversion from YouTube,
+   never trained on) the models rank well but miss many fakes at a fixed threshold.
+   [`reports/06_generalization.md`](reports/06_generalization.md)
+
+## How decisions were made
+
+Every model choice followed a rule written in [`docs/00_development_log.md`](docs/00_development_log.md) before the
+results it depends on existed: which checkpoint, which ensemble, and the guardrails it must pass. Choices use only the
+validation set and the DeepVoice benchmark; the held-out set is scored once, after the choice. Where the plan changed
+(an owner decision, a crashed run), the log records it as it happened.
+
+## Documents
 
 | topic | document |
 |---|---|
-| Development log: every stage, pre-registered rules, deviations | [`docs/00_development_log.md`](docs/00_development_log.md) |
-| Data: sources, cleaning, splits, frozen eval subsets | [`docs/02_dataset.md`](docs/02_dataset.md), [`reports/01_data_audit.md`](reports/01_data_audit.md) |
-| External corpora survey (20 datasets, licenses) | [`docs/03_external_data.md`](docs/03_external_data.md) |
-| How synthetic speech is made; our TTS sim; ElevenLabs | [`docs/04_synthetic_speech.md`](docs/04_synthetic_speech.md) |
-| How real speech is made, and what synthesis gets wrong | [`docs/05_speech_biology.md`](docs/05_speech_biology.md) |
-| The metric, both cost readings, default-value game theory | [`docs/01_challenge_and_scoring.md`](docs/01_challenge_and_scoring.md) |
-| Classic ML results + feature importance | [`reports/02_r1_classic.md`](reports/02_r1_classic.md) |
-| Model architectures (flowcharts R0 to E5) | [`docs/06_architecture.md`](docs/06_architecture.md) |
+| Development log: every stage, its rule, and what happened | [`docs/00_development_log.md`](docs/00_development_log.md) |
+| The challenge, the metric, the scorer vs the brief | [`docs/01_challenge_and_scoring.md`](docs/01_challenge_and_scoring.md) |
+| Cleaning, manifest and splits | [`docs/02_dataset.md`](docs/02_dataset.md) |
+| External corpora (survey, licences, counts) | [`docs/03_external_data.md`](docs/03_external_data.md) |
+| How synthetic speech is made; our simulator | [`docs/04_synthetic_speech.md`](docs/04_synthetic_speech.md) |
+| How real speech is made; the biology features | [`docs/05_speech_biology.md`](docs/05_speech_biology.md) |
+| Architecture charts, R0 to E7 | [`docs/06_architecture.md`](docs/06_architecture.md) |
+| Data audit and the shortcut | [`reports/01_data_audit.md`](reports/01_data_audit.md) |
+| Classic model (R1) | [`reports/02_r1_classic.md`](reports/02_r1_classic.md) |
 | Error analysis | [`reports/03_error_analysis.md`](reports/03_error_analysis.md) |
 | Fine-tuned XLS-R (R4ft) | [`reports/04_r4ft_xlsr.md`](reports/04_r4ft_xlsr.md) |
-| R5 submission and the official score | [`reports/05_r5_submission_and_official_score.md`](reports/05_r5_submission_and_official_score.md) |
+| Initial submission (R5) and its official score | [`reports/05_r5_submission_and_official_score.md`](reports/05_r5_submission_and_official_score.md) |
 | Public benchmarks and call-audio stress tests | [`reports/06_generalization.md`](reports/06_generalization.md) |
-| R6 and the final submission (E5) | [`reports/07_r6_and_final_submission.md`](reports/07_r6_and_final_submission.md) |
-
-## How the work was done
-
-Two laptops, one repo. A CPU laptop (16 threads, 60 GB RAM) coordinated and owned the dataset and submission files, and
-a GPU laptop (RTX 5050, 8 GB) trained the neural models. They exchanged messages and files over a small authenticated
-service on the local network, and **every PR was reviewed by the other machine before merge**. Those reviews caught real
-bugs: a submission writer that silently defaulted every row, leaky cross-validation folds, and a training weight derived
-from the headline set.
+| R6 and E5 | [`reports/07_r6_and_e5.md`](reports/07_r6_and_e5.md) |
+| R7a and the final submission (E7) | [`reports/08_r7_rawboost_and_final.md`](reports/08_r7_rawboost_and_final.md) |
+| Every scored model and set | [`reports/leaderboard.md`](reports/leaderboard.md) |
 
 ## Reproduce
 
-Windows PowerShell, from the repo root (Python 3.12):
+Windows PowerShell, Python 3.12, from the repo root:
 ```
 py -3.12 -m venv .venv
-.venv\Scripts\pip install -r requirements.txt   # pins CPU torch via the PyTorch index in the file
-$env:HEARSAY_ROOT = (Get-Location).Path          # the code's default root is the author's laptop path (src/hearsay/audio.py)
+.venv\Scripts\pip install -r requirements.txt   # CPU torch; on a GPU machine install a CUDA torch build first
+$env:HEARSAY_ROOT = (Get-Location).Path
 $env:PYTHONPATH = "src"
 ```
-GPU machines: install a CUDA torch build first (we used `torch 2.14.0+cu130` from https://download.pytorch.org/whl/cu130),
-then install requirements.txt **without** its two torch lines, or pip swaps the CPU build back in.
+Put the challenge data under `data/raw/` (`diffssd/`, `lj_real/`, `hgt_test/`) and the organizers'
+[asvspoof5](https://github.com/asvspoof-challenge/asvspoof5) repo under `third_party/`. Then, in order:
 
-Put the challenge data under `data/raw/` (`diffssd/`, `lj_real/`, `hgt_test/`) and the organizers' `asvspoof5` repo
-under `third_party/`. Rebuild the dataset:
 ```
-python scripts/clean_given.py                     # DiffSSD + LJ -> 16 kHz canonical clips + manifests
-python scripts/ingest_ljspeech.py                 # and ingest_librispeech.py, ingest_wavefake.py, ingest_hf_sasb.py,
-                                                  #     ingest_mlaad_tiny.py (docs/03_external_data.md, section 5)
-python scripts/run_sim.py                         # own TTS sim
-python scripts/make_splits.py                     # reads the committed splits/eval_subsets_frozen.csv
-```
-The models and the final submission (the order of `scripts/README.md`):
-```
-python scripts/extract_classic.py --workers 10 --n-fake 200000   # R1 features, every train row
-python scripts/extract_classic.py --hgt --workers 10              # the 1,671 test clips (inference only)
-python scripts/train_classic.py --suffix _full --no-svm           # R1 -> R1_lgbm_all_full
-python scripts/finetune_ssl.py train --device cuda                # R4ft (XLS-R-300M, 12 blocks)
-python scripts/finetune_ssl.py score --device cuda --hgt
-python scripts/fuse.py --name R5_r4ft_r1 --models R4ft_xlsr_light R1_lgbm_all_full    # R5
+# 1. data
+python scripts/clean_given.py
+python scripts/ingest_ljspeech.py          # also ingest_librispeech, ingest_wavefake, ingest_hf_sasb, ingest_mlaad_tiny
+python scripts/run_sim.py
 python scripts/ingest_bench.py asvspoof2021_df asvspoof2021_df_b cd_add decro_en deepvoice
-python scripts/bench_to_manifest.py asvspoof2021_df asvspoof2021_df_b cd_add decro_en && python scripts/make_splits.py
-python scripts/finetune_ssl.py train --device cuda --name R6_xlsr_light --seed 1   # R6
-python scripts/finetune_ssl.py score --device cuda --name R6_xlsr_light --hgt
-python scripts/bench_score.py r4ft --name R6_xlsr_light --device cuda --sets deepvoice
-python scripts/r6_select.py --write                              # pre-registered rule -> E5 final submission
-python scripts/score.py validate submission/HearsayScoreKey4GeorgiaMellon_FINAL.tsv
+python scripts/bench_to_manifest.py asvspoof2021_df asvspoof2021_df_b cd_add decro_en
+python scripts/make_splits.py              # uses the committed splits/eval_subsets_frozen.csv
+
+# 2. classic model (R1)
+python scripts/extract_classic.py --workers 10 --n-fake 200000
+python scripts/extract_classic.py --hgt --workers 10
+python scripts/train_classic.py --suffix _full --no-svm
+
+# 3. XLS-R models (GPU); each: train, then score validation/test/HGT, then the DeepVoice benchmark
+python scripts/finetune_ssl.py train --device cuda                                            # R4ft
+python scripts/finetune_ssl.py train --device cuda --name R6_xlsr_light --seed 1              # R6
+python scripts/finetune_ssl.py train --device cuda --name R7a_xlsr_rb --seed 2 --rawboost 0.6 # R7a
+python scripts/finetune_ssl.py score --device cuda --name <name> --hgt
+python scripts/bench_score.py r4ft --name <name> --device cuda --sets deepvoice
+
+# 4. fusion and the final file
+python scripts/r7_select.py --write        # applies the Stage 11 rule -> submission/..._R7_FINAL.tsv
+python scripts/score.py validate submission/HearsayScoreKey4GeorgiaMellon_R7_FINAL.tsv
 python -m pytest -q tests
 ```
 
+<details>
+<summary>Every script, by stage</summary>
+
+| stage | script | what it does |
+|---|---|---|
+| 1 data audit | `audit_raw.py` | decoding, duration, level, silence and band edges of the raw files |
+| | `clean_given.py` | DiffSSD and the given reals → 16 kHz canonical clips + manifest |
+| | `audit_shortcuts.py` | can a depth-3 tree on trivial cues separate real from fake? |
+| | `check_manifest.py` | asserts the combined manifest is sound |
+| 2 external data | `ingest_ljspeech.py`, `ingest_librispeech.py`, `ingest_wavefake.py`, `ingest_mlaad_tiny.py`, `ingest_hf_sasb.py` | one corpus (or HuggingFace repack family) each → canonical clips + manifest |
+| | `ingest_common.py` | shared helpers for the ingest scripts |
+| | `ingest_summary.py` | counts and checks for `docs/03_external_data.md` |
+| | `make_splits.py` | unions all manifests, assigns grouped splits, applies the frozen eval subsets |
+| 3 simulator | `run_sim.py`, `sim_figures.py` | the 5,204 simulated fakes, and figures comparing them with real speech |
+| 4 biology | `extract_bio.py`, `bio_figures.py` | the 48 biology features, and their real-vs-fake effect sizes |
+| 5 scoring | `score.py` | local copy of the organizers' minDCF; validates submission files |
+| 6 first models | `extract_classic.py`, `train_classic.py` | R0/R1 features and models |
+| | `run_aasist.py` | R3: the organizers' pretrained AASIST |
+| | `extract_ssl.py`, `train_ssl_heads.py` | frozen speech-model embeddings with simple heads (R4) |
+| 7 XLS-R + fusion | `vram_probe.py` | picks a memory configuration that fits the GPU |
+| | `finetune_ssl.py` | trains and scores the fine-tuned XLS-R models (R4ft, R6, R7a) |
+| | `plot_r4ft_curve.py` | training-curve figure |
+| | `fuse.py` | logistic-regression fusion (R5) |
+| | `make_submission.py` | writes a submission file (`--higher-is-real` for the scorer) |
+| 8 generalization | `ingest_bench.py`, `make_keyguard_sets.py`, `bench_score.py` | public benchmarks and typing-noise sets, scored by frozen models |
+| 10 R6 | `bench_to_manifest.py` | registers three benchmark sets as training data (never DeepVoice) |
+| | `r6_select.py` | the Stage 10 rule → E5 |
+| 11 R7 | `r7_select.py` | the Stage 11 rule → E7, the final submission |
+
+</details>
+
+## Repository layout
+
 ```
-docs/                     background, numbered in reading order (00 = development log, 06 = architectures)
-reports/                  results, numbered in the order they happened (01 data audit ... 07 final submission)
-src/hearsay/              package: audio I/O, preprocessing, features, sim, models, metrics, evaluation
-scripts/                  reproducible CLIs, indexed by stage in scripts/README.md
-tests/                    unit tests (python -m pytest -q tests)
-splits/                   the frozen evaluation subsets
-data/, third_party/       gitignored (audio, features, scores, weights; organizers' scorer)
+docs/          background, in reading order (00 development log ... 06 architecture); figures/ holds the charts
+reports/       results, in the order they happened (01 data audit ... 08 final submission)
+src/hearsay/   audio I/O, preprocessing, features, simulator, models, metrics, evaluation
+scripts/       command-line steps (table above)
+tests/         unit tests
+splits/        the frozen evaluation subsets
+data/, third_party/, submission/   not committed: audio, features, scores, weights, the organizers' code
 ```
 
-## Credits and licenses
+Hardware: a CPU laptop (16 threads, 60 GB RAM) built the data and ran the classic models; a GPU laptop (RTX 5050,
+8 GB) fine-tuned XLS-R in bf16 with gradient checkpointing.
 
-- **Organizers' scorer and baselines:** [asvspoof-challenge/asvspoof5](https://github.com/asvspoof-challenge/asvspoof5)
-  (evaluation package, Baseline-AASIST by Tak & Jung, NAVER + EURECOM, MIT). Imported in place from `third_party/`,
-  never copied or modified.
-- **Data:** DiffSSD (Purdue; CC BY-NC-ND 4.0), LJSpeech (public domain), LibriSpeech (CC BY 4.0), WaveFake,
-  LibriSeVoc and In-the-Wild (CC BY-SA 4.0), ASVspoof 2019 LA / ASVspoof 5 (ODC-By 1.0), CVoiceFake (CC BY 4.0), DFADD
-  (MIT), **SONAR and MLAAD-tiny (CC BY-NC 4.0)**. Per-clip licenses are in the manifest; details in
-  [`docs/03_external_data.md`](docs/03_external_data.md). Because DiffSSD, SONAR and MLAAD-tiny are non-commercial, **models
-  trained here are for non-commercial use only**. This repo redistributes no audio.
-- **Pretrained models:** microsoft/wavlm-base-plus, facebook/wav2vec2-xls-r-300m, and for the sim
+## Credits and licences
+
+- **Organizers' scorer and baseline:** [asvspoof-challenge/asvspoof5](https://github.com/asvspoof-challenge/asvspoof5)
+  (evaluation package, Baseline-AASIST; MIT). Used in place from `third_party/`, not copied or modified.
+- **Data:** DiffSSD (CC BY-NC-ND 4.0), LJSpeech (public domain), LibriSpeech (CC BY 4.0), WaveFake, LibriSeVoc and
+  In-the-Wild (CC BY-SA 4.0), ASVspoof 2019 LA / ASVspoof 5 (ODC-By 1.0), CVoiceFake (CC BY 4.0), DFADD (MIT),
+  SONAR and MLAAD-tiny (CC BY-NC 4.0); benchmarks per [`reports/06_generalization.md`](reports/06_generalization.md).
+  Because some sources are non-commercial, **models trained here are for non-commercial use only**. No audio is
+  redistributed.
+- **Pretrained models:** facebook/wav2vec2-xls-r-300m, microsoft/wavlm-base-plus; for the simulator
   kakao-enterprise/vits-ljs (MIT), facebook/mms-tts-eng (CC BY-NC 4.0), microsoft/speecht5_tts + speecht5_hifigan (MIT).
-- **Code license:** none chosen yet (owner's decision); the repository is private.
+- **Methods:** RawBoost (Tak et al., ICASSP 2022), AASIST (Jung et al., ICASSP 2022), XLS-R (Babu et al., 2021).
