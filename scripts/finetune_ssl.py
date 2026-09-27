@@ -53,7 +53,7 @@ N_HGT = 1671
 OUT = DATA / "models" / "r4ft_xlsr"
 # args that define the model/optimizer layout: a resume or a score with different values would be silently wrong
 ARCH = ("model", "backend", "max_blocks", "freeze_blocks", "micro_batch", "accum")
-WATCH = ("asvspoof5", "asvspoof2019_la", "playht", "unit_speech")  # plan §7 watch list (val_testlike slices)
+WATCH = ("asvspoof5", "asvspoof2019_la", "playht", "unit_speech")  # hardest val_testlike slices, printed at every eval
 
 
 def parse(argv=None):
@@ -89,6 +89,8 @@ def parse(argv=None):
     p.add_argument("--max-steps", type=int, default=0, help="stop at this optimizer step (0 = no limit; smoke tests)")
     p.add_argument("--hours", type=float, default=0, help="wall-clock budget for this invocation (0 = none)")
     p.add_argument("--seed", type=int, default=0)
+    p.add_argument("--rawboost", type=float, default=0.0,
+                   help="probability of a RawBoost channel augmentation per training clip (0 = original recipe)")
     p.add_argument("--up", action="append", default=None,
                    help="cell up-weight source:label=w (repeatable; default asvspoof5:bonafide=2)")
     p.add_argument("--power", type=float, default=0.5, help="cell/generator weight = n^power")
@@ -331,7 +333,7 @@ def train(a):
     if state["stop"]:
         print(f"run already finished ({state['stop']}); delete {LAST} to retrain", flush=True)
         return state
-    ds = TrainSet(tr, ROOT, a.seed)
+    ds = TrainSet(tr, ROOT, a.seed, a.rawboost)
 
     def batches():
         sampler.start = state["step"] * a.accum  # a resume mid-accumulation restarts that group

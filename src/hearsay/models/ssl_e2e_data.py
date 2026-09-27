@@ -114,11 +114,12 @@ class BalancedBatches(Sampler):
 class TrainSet(Dataset):
     """item (row, sample_id) -> (float32 [64000] prep()'d random 4 s crop, float32 label with 1 = spoof)."""
 
-    def __init__(self, df, root, seed=0):
+    def __init__(self, df, root, seed=0, rawboost_p=0.0):
         self.paths = [str(Path(root) / p) for p in df.path]
         self.split = df.split.to_numpy().astype(str)
         self.y = (df.label.to_numpy() == "spoof").astype(np.float32)
         self.seed = int(seed)
+        self.rawboost_p = float(rawboost_p)
 
     def __len__(self):
         return len(self.paths)
@@ -129,7 +130,7 @@ class TrainSet(Dataset):
         if self.split[row] != "train":  # a raise, not an assert: asserts vanish under python -O
             raise ValueError(f"non-train row {row} ({self.split[row]}) reached the train loader")
         rng = np.random.default_rng([self.seed, int(sid)])
-        x = train_clip(self.paths[row], rng, seconds=CROP_S)
+        x = train_clip(self.paths[row], rng, seconds=CROP_S, rawboost_p=self.rawboost_p)
         if len(x) != N_SAMP:
             raise ValueError(f"train crop has {len(x)} samples, expected {N_SAMP}")
         return torch.from_numpy(np.ascontiguousarray(x, dtype=np.float32)), torch.tensor(self.y[row])

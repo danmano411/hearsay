@@ -1,0 +1,4 @@
+cand,models,val,dv,passes,picked
+E5 (baseline),R4ft_xlsr_light+R6_xlsr_light+R1,0.009881883562339233,0.15151630048930248,,False
+E7,R4ft_xlsr_light+R6_xlsr_light+R7a_xlsr_rb+R1,0.00876603242687431,0.13301890050849083,True,True
+E7s,R4ft_xlsr_light+R6_xlsr_light+R7a_xlsr_rb,0.008287936317845534,0.14609030029741915,True,False

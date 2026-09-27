@@ -4,6 +4,8 @@ This file replaces the phase plans that guided the project. It records, stage by
 Amendments and deviations are recorded where they occurred, with the evidence behind them.
 All times are EDT, 25 to 27 September 2026. Numbers are quoted from the linked reports and docs.
 
+![How the model evolved](figures/architecture/evolution.svg)
+
 ## Stage 0: scope and owner decisions
 
 - **When:** 25 Sep, 21:49 (project skeleton and phase plans).
@@ -108,7 +110,7 @@ R1 improved from 0.305 to 0.253 when trained on the full training set (26 Sep, 0
 - **When:** plan about 15:45; rule revised about 16:10, before any R6 training; R6 selected 21:18. Submission deadline 27 Sep, 08:00; R5 would stay the final if R6 had not finished by then.
 - **Question:** Can more diverse training data beat 0.0584, using only our own data to choose?
 - **Rule fixed in advance (revised version):** R6 = the exact R4ft recipe with seed 1, plus ASVspoof 2021 DF, CD-ADD and DECRO-en as training sources. DeepVoice is never trained on. Metric: official minDCF (Pspoof 0.3, Cmiss 1, Cfa 4). Guardrails relative to R5: `val_testlike` ≤ R5 + 0.003 (fusions cross-fitted) and DeepVoice ≤ R5 + 0.02. Preference among passing candidates: E5 > E > R6, except E if E5's `val_testlike` is worse than E's by more than 0.002. If none passes, the final stays R5.
-- **Outcome** ([reports/07_r6_and_final_submission.md](../reports/07_r6_and_final_submission.md)):
+- **Outcome** ([reports/07_r6_and_e5.md](../reports/07_r6_and_e5.md)):
 
 | candidate | val_testlike | DeepVoice | passes |
 |---|---|---|---|
@@ -124,3 +126,34 @@ Report-only, scored once after the choice (`test_internal_testlike`, official): 
 ## How the work was run
 
 Two laptops shared the work. A CPU machine acted as coordinator and was the only writer of the manifest, leaderboard, canonical scores and submission files. A GPU machine (RTX 5050, 8 GB) ran the fine-tuning and uploaded its scores. They exchanged messages and large files through a small token-authenticated HTTP hub on the local network, and tracked tasks as GitHub issues. Every change went through a pull request that the other machine reviewed before merge. Reviews caught a submission writer that silently defaulted every row, leaky cross-validation folds in the fusion, and a training weight derived from the headline set ([reports/05_r5_submission_and_official_score.md](../reports/05_r5_submission_and_official_score.md)).
+
+## Stage 11: R7, RawBoost and a second backbone
+
+- **When:** rule written 27 Sep, 02:00, before any R7 training. Submission deadline 08:00.
+- **Question:** Team 7 leads at minDCF 0.0317 (EER 1.44 %); our best official score is 0.0584. The gap between our
+  held-out set (0.0138) and the test (0.0584) points to unfamiliar recording channels and generators. Can channel
+  augmentation plus a second pretrained backbone close it?
+- **What changes:**
+  - **RawBoost** (Tak et al., ICASSP 2022): with probability 0.6 per training clip, one of the paper's channel
+    simulations (convolutive linear/non-linear noise, impulsive signal-dependent noise, stationary coloured noise, or
+    their series combinations) runs before our usual augmentation, identically for real and fake clips.
+  - **R7a:** XLS-R-300M, the R4ft recipe, seed 2, RawBoost 0.6, the current training set (including R6's extra data).
+  - **R7b:** WavLM-Large (a different self-supervised family, same size), same recipe, seed 3, RawBoost 0.6.
+- **Rule fixed in advance:**
+  - Metric: the organizers' official minDCF (Pspoof 0.3, Cmiss 1, Cfa 4).
+  - Candidates: **E7** = LR fusion of every finished XLS-R/WavLM model (R4ft, R6, R7a, R7b) + R1; **E7s** = the same
+    without R1. Fusions are fit on `val_testlike` and judged on their group-cross-fitted scores, as before.
+  - Guardrails relative to E5 (the current final): `val_testlike` ≤ E5 + 0.003 and DeepVoice ≤ E5 + 0.02.
+  - Preference: E7 > E7s. Exception: E7s if its `val_testlike` beats E7's by more than 0.002. If neither passes, E5
+    stays the final.
+  - Time box: a model not scored and uploaded by 05:45 is left out; the final file is built by 06:30.
+  - Nothing is chosen from the organizers' feedback or the HGT audio.
+- **Owner amendment (03:12, before any R7 score existed on the CPU side):** R7b (WavLM-Large) is cancelled so the GPU
+  time goes to one fully trained model. R7a stopped at its 1.25 h budget while still improving (best `val_testlike`
+  combined 0.0283 at step 5,120), so it resumes from its checkpoint for up to 3 more hours under its unchanged early stop.
+  New time box: scored and uploaded by 07:05; the final file is built by 07:30. The step-5,120 scores stay as the
+  fallback if the resumed run misses the time box. The selection rule itself is unchanged; E7 is then R4ft + R6 + R7a + R1.
+- **Outcome (06:15):** R7a trained in three legs (a memory-safeguard kill at step ~6,250; owner-approved resume with
+  2 loader workers), early-stopped at 14,336, best step 10,240. Rule result: E7 (R4ft + R6 + R7a + R1) passes and is
+  the final (val_testlike 0.0088 vs E5 0.0099; DeepVoice 0.1330 vs 0.1515). Details:
+  [`reports/08_r7_rawboost_and_final.md`](../reports/08_r7_rawboost_and_final.md).

@@ -24,11 +24,11 @@ from hearsay.preprocess import augment, crop, prep
 WIN_S = (NB_SAMP + 0.5) / SR
 
 
-def train_clip(path, rng, seconds=WIN_S):
+def train_clip(path, rng, seconds=WIN_S, rawboost_p=0.0):
     """load -> cheap 6 s pre-crop -> augment() (class-symmetric) -> prep() -> random `seconds` crop (also ssl_e2e)."""
     y = load(path)[0]
     y = crop(y, min(len(y) / SR, 6.0), rng)  # cheap pre-crop so augment/prep don't process 30 s clips
-    y = prep(augment(y, rng))
+    y = prep(augment(y, rng, rawboost_p))
     return crop(y, seconds, rng)
 
 

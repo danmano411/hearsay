@@ -11,7 +11,7 @@ import io
 import librosa
 import numpy as np
 import soundfile as sf
-from scipy.signal import butter, sosfiltfilt
+from scipy.signal import butter, firwin, freqz, oaconvolve, sosfiltfilt
 
 SR = 16000
 LOWPASS_HZ = 7000
@@ -40,8 +40,68 @@ def crop(y, seconds, rng=None):
     return y[start:start + n]
 
 
-def augment(y, rng):
-    """Class-symmetric channel augmentation (apply to real AND fake, before prep())."""
+def _notch_fir(rng, n_bands=5, min_f=20, max_f=8000, min_bw=100, max_bw=1000, min_c=10, max_c=100, min_g=0, max_g=0):
+    """RawBoost's random multi-band FIR filter (Tak et al., ICASSP 2022): cascade of band-pass FIRs, peak gain G dB."""
+    b = np.ones(1)
+    for _ in range(n_bands):
+        fc, bw = rng.uniform(min_f, max_f), rng.uniform(min_bw, max_bw)
+        c = int(rng.integers(min_c, max_c))
+        c += 1 - c % 2  # odd number of taps
+        lo, hi = max(fc - bw / 2, 1.0), min(fc + bw / 2, SR / 2 - 1)
+        if hi > lo:
+            b = np.convolve(firwin(c, [lo, hi], window="hamming", fs=SR), b)
+    _, h = freqz(b, 1, fs=SR)
+    return 10 ** (rng.uniform(min(min_g, max_g), max(min_g, max_g)) / 20) * b / (np.max(np.abs(h)) + 1e-12)
+
+
+def _norm(x):
+    m = np.max(np.abs(x))
+    return x / m if m > 0 else x
+
+
+def _lnl(x, rng, n_f=5, bias_lo=5, bias_hi=20):
+    """Linear and non-linear convolutive noise: sum_i FIR_i(x ** i), higher powers attenuated."""
+    y = np.zeros_like(x)
+    lo, hi = 0.0, 0.0
+    for i in range(n_f):
+        if i == 1:
+            lo, hi = lo - bias_lo, hi - bias_hi
+        y = y + oaconvolve(x ** (i + 1), _notch_fir(rng, min_g=lo, max_g=hi), mode="same")
+    return _norm(y - y.mean())
+
+
+def _isd(x, rng, p=10, g=2):
+    """Impulsive signal-dependent noise on a random P % of samples."""
+    n = int(len(x) * rng.uniform(0, p) / 100)
+    idx = rng.permutation(len(x))[:n]
+    y = x.copy()
+    y[idx] = x[idx] + g * x[idx] * (2 * rng.random(n) - 1) * (2 * rng.random(n) - 1)
+    return _norm(y)
+
+
+def _ssi(x, rng, snr_lo=10, snr_hi=40):
+    """Stationary signal-independent coloured noise at a random SNR."""
+    noise = _norm(oaconvolve(rng.normal(0, 1, len(x)), _notch_fir(rng), mode="same"))
+    snr = rng.uniform(snr_lo, snr_hi)
+    return x + noise / (np.linalg.norm(noise) + 1e-12) * np.linalg.norm(x) / 10 ** (0.05 * snr)
+
+
+RAWBOOST = ((_lnl,), (_isd,), (_ssi,), (_lnl, _isd), (_lnl, _isd, _ssi))  # the paper's algorithms 1, 2, 3, 5, 4
+
+
+def rawboost(y, rng):
+    """One RawBoost algorithm chosen at random, in series where the paper does. Length and dtype preserved."""
+    x = y.astype(np.float64)
+    for f in RAWBOOST[int(rng.integers(len(RAWBOOST)))]:
+        x = f(x, rng)
+    return x.astype(np.float32)
+
+
+def augment(y, rng, rawboost_p=0.0):
+    """Class-symmetric channel augmentation (apply to real AND fake, before prep()). With rawboost_p > 0, RawBoost runs
+    first with that probability; at 0 the random stream and the output are exactly the original recipe's."""
+    if rawboost_p and rng.random() < rawboost_p:
+        y = rawboost(y, rng)
     r = rng.random()
     if r < 0.25:  # lossy codec round trip
         buf = io.BytesIO()
