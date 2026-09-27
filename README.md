@@ -5,6 +5,16 @@ real human speech or machine-generated (text-to-speech or voice cloning). The or
 **minDCF**: a cost where missed fakes and false alarms are weighted, and 0 is perfect and 1 is no better than giving
 every clip the same answer. Their scorer uses Pspoof 0.3, Cmiss 1, Cfa 4 and reads a **higher score as real**.
 
+## In our own words
+
+Hearsay combined an interesting deep learning challenge, a wealth of data, and a problem we expect to become very real in the near future. As AI improves, it gets harder to keep a human connection without being skeptical of everything: any voice could be AI, or a malicious system preying on our attention or livelihood at scale. We knew we had to build a solution.
+
+Our first turning point was finding the shortcuts that would have derailed the entire project early on. That led us to write custom functions that clean every clip and add realistic noise during training, so the models grew stronger instead of dangerously overfitting. We also realized that the little real speech we were given looked nothing like the real speech in the test set, and that drove us to change the data itself.
+
+The greatest turning point, and our main innovation, was the simulator. In other machine learning work, like driverless racing, checking your assumptions against physical ground truth is a must, so one of my first design decisions was to build a simulator. It gave the model its hardest training cases, the ones it struggled with most, and helped us break down what makes them hard. I also like the decision to turn to biology: it didn't improve the model drastically, but it gave our features a physical basis.
+
+Overall, simply adding more data without a reason was rarely the best decision. What turned this project into an art rather than just programming and prompting was the clever ways we gave the model better tools, context about what speech actually is, and a combination of complex and simple models.
+
 <p align="center">
   <a href="#how-the-model-evolved"><img src="docs/figures/architecture/evolution.svg" width="32%" alt="How the model evolved"></a>
   <a href="#data-what-went-in-and-how-every-clip-is-prepared"><img src="docs/figures/architecture/data_pipeline.svg" width="32%" alt="Data pipeline"></a>
@@ -36,16 +46,6 @@ from three generators never trained on; same scorer settings), each step up the 
 
 The HGT test is harder than anything we could hold out (R5: 0.0138 here, 0.0584 official), because its speakers,
 recording chains and generators differ from ours.
-
-## In our own words
-
-Hearsay combined an interesting deep learning challenge with a plethora of data and a problem that we see becoming a real issue in the near future. As AI evolves, it becomes increasingly hard to maintain human connection and not be skeptical of everything as anything has a chance of being AI or some malicious system preying on our attention or livelihood at scale, we knew that we had to create a solution.
-
-Our main turning point is finding the shortcuts that would have derailed the entire project early on, developing custom functions to add noise to the data which would make our models stronger in the long run and not dangerously overfit. On top of that, realizing that the limited real data we had to train on was unproportional to the real data in the test set which is what drove us to make a change.
-
-The greatest turning point and point of innovation was the simulator. Working in other machine learning projects where confirming biases with physical ground truth is a must, like with driverless racing, my first design decisions early on was to make a simulator which ended up boosting the model drastically by giving it a way to build cases that it struggled with and really break down what makes it challenging. Also I like the decision I made to appeal to biology, as even though it didn't help the model drastically, it still gave more physical backing.
-
-Overall, simply "adding more data" was not the best decision in most cases and often ended up backfiring. Instead, the clever ways we gave the model more tools, context about what speech actually is, and combined model representation to combine complex analysis with simple ones, was what really turned this project into an art rather than just programming and prompting.
 
 ## Techniques
 
