@@ -37,6 +37,41 @@ from three generators never trained on; same scorer settings), each step up the 
 The HGT test is harder than anything we could hold out (R5: 0.0138 here, 0.0584 official), because its speakers,
 recording chains and generators differ from ours.
 
+## Techniques
+
+Nine families of technique, each chosen to answer a question the previous one raised:
+
+| area | techniques | what it gave us |
+|---|---|---|
+| Signal processing | resampling to 16 kHz, DC removal, silence trimming, 10th-order Butterworth low-pass, RMS normalization; LFCC, MFCC, spectral shape and contrast | a clean, comparable clip, and 180 spectral features |
+| Speech science | 48 features from the physiology of speech: phonation (jitter, shimmer, HNR), articulation (formant speed, vocal-tract length), rhythm, respiration, turbulence, phase ([`docs/05`](docs/05_speech_biology.md)) | an interpretable view of what synthesis gets wrong |
+| Data engineering | 11 open corpora + 4 benchmarks behind one manifest; splits grouped by speaker and sentence; 3 generators held out entirely; frozen 70/30 evaluation subsets | validation that measures unseen generators, not memory |
+| Generative simulation | our own fakes by copy-synthesis (Griffin-Lim, HiFi-GAN) and TTS (VITS, MMS, SpeechT5) | fakes that share a real clip's voice and text |
+| Classic ML | decision tree, LightGBM, logistic regression, SVM | R0 leak detector, R1 baseline |
+| Deep learning | AASIST graph attention (zero-shot), frozen WavLM layer probing, XLS-R-300M fine-tuned end to end: truncated to 12 blocks, layer-wise learning-rate decay, attentive statistics pooling, bf16 with gradient checkpointing on an 8 GB GPU | the core models (R4ft, R6, R7a) |
+| Augmentation | MP3 round trip, additive noise, resampler round trip, applied equally to both classes; RawBoost (convolutive, impulsive and coloured noise) | robustness to recording channels |
+| Ensembling | multi-window inference; logistic-regression fusion with per-model transforms, standardization and group cross-fitting | R5, E5, E7 |
+| Evaluation | exact re-implementation of the organizers' scorer (unit-tested); both cost readings; selection rules written before results; guardrails; a held-out set scored once; public benchmarks; typing-noise call-audio tests | numbers we can trust, and a record of every choice |
+
+**Ideas of our own:**
+- **A leak detector as a model.** R0 sees only trivial cues. We used it to prove the shortcut was gone after
+  `prep()` (0.391 → 0.853 minDCF, near chance) instead of assuming it.
+- **Fakes in the real voices.** Copy-synthesis of real LJSpeech and LibriSpeech clips gives fakes with the same
+  speaker and sentence as a real clip, so the voice can never be the cue. These became the hardest fakes in validation.
+- **Biology as a diagnostic.** A "turbulence" feature looked like a strong real-vs-fake cue. It turned out to be the
+  given reals missing an anti-alias filter (energy up to 8 kHz), which led to the 7 kHz low-pass in `prep()`.
+- **Reading the scorer's code.** The brief and the scorer disagree on score direction; we found it, tracked both
+  readings, and flipped our file (1.0 → 0.0584).
+- **Pre-registered choices.** Every checkpoint and ensemble was picked by a rule written in the
+  [development log](docs/00_development_log.md) before its results existed; changes are logged with their reasons.
+- **Call-audio stress test.** Keyboard typing mixed under speech at 20 to 0 dB, to check the detector would hold up
+  on a real call ([`reports/06`](reports/06_generalization.md)).
+
+**Tried, measured and dropped** (depth, not just the winner): AASIST used as-is (did not transfer); frozen WavLM
+features with a linear head (far behind fine-tuning); SVM and logistic regression on the classic features (behind
+LightGBM); adding AASIST or biology-only models to the fusion, and stronger regularization (no gain); a second
+backbone, WavLM-Large (cancelled so one model could train fully). Details in the reports.
+
 ## How the model evolved
 
 ![How the model evolved](docs/figures/architecture/evolution.svg)
