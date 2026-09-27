@@ -5,6 +5,13 @@ real human speech or machine-generated (text-to-speech or voice cloning). The or
 **minDCF**: a cost where missed fakes and false alarms are weighted, and 0 is perfect and 1 is no better than giving
 every clip the same answer. Their scorer uses Pspoof 0.3, Cmiss 1, Cfa 4 and reads a **higher score as real**.
 
+<p align="center">
+  <a href="#how-the-model-evolved"><img src="docs/figures/architecture/evolution.svg" width="32%" alt="How the model evolved"></a>
+  <a href="#data-what-went-in-and-how-every-clip-is-prepared"><img src="docs/figures/architecture/data_pipeline.svg" width="32%" alt="Data pipeline"></a>
+  <a href="#the-final-model-e7"><img src="docs/figures/architecture/e7_fusion.svg" width="32%" alt="E7 fusion"></a>
+  <br><sub><b>How the model evolved</b> · <b>Data in and out</b> · <b>The final model, E7</b> (click for each section)</sub>
+</p>
+
 ## Results
 
 | submission | system | HGT test (official) |
@@ -29,6 +36,23 @@ from three generators never trained on; same scorer settings), each step up the 
 
 The HGT test is harder than anything we could hold out (R5: 0.0138 here, 0.0584 official), because its speakers,
 recording chains and generators differ from ours.
+
+## How the model evolved
+
+![How the model evolved](docs/figures/architecture/evolution.svg)
+
+The major design decisions, in order:
+1. **Clean the shortcut out first.** The given reals differed from the fakes in trivial ways (bandwidth, silence,
+   level), so `prep()` normalizes every clip before any model sees it.
+2. **Fix the data, not just the model.** One real voice against 70,000 fakes teaches the wrong thing, so we added
+   11 open corpora and our own simulated fakes in the real voices, and held three generators out of training.
+3. **Understand the signal.** Speech-biology and spectral features gave an interpretable baseline (R1) and exposed
+   the shortcut.
+4. **Use a pretrained speech model, fine-tuned.** XLS-R fine-tuned end to end beat every hand-made feature by 9×.
+5. **Aim at the test's difficulty, not our validation set.** The official score was 4× our held-out number, so the
+   last steps added diversity (R6: new data and seed) and channel robustness (R7a: RawBoost).
+6. **Combine models that fail differently.** Each fusion (R5, E5, E7) was chosen by a rule written before the
+   results existed; E7 is the final.
 
 ## Data: what went in, and how every clip is prepared
 

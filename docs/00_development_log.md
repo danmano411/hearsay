@@ -4,6 +4,8 @@ This file replaces the phase plans that guided the project. It records, stage by
 Amendments and deviations are recorded where they occurred, with the evidence behind them.
 All times are EDT, 25 to 27 September 2026. Numbers are quoted from the linked reports and docs.
 
+![How the model evolved](figures/architecture/evolution.svg)
+
 ## Stage 0: scope and owner decisions
 
 - **When:** 25 Sep, 21:49 (project skeleton and phase plans).

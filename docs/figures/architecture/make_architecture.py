@@ -299,8 +299,84 @@ def data_io():
     c.save("data_pipeline")
 
 
+def evolution():
+    steps = [
+        ("Start", "25 Sep", "data", "The problem",
+         ["69,450 fakes from 10 generators, but only 242 real clips, all of one speaker (LJSpeech).",
+          "Score 1,671 unseen clips; ranked by the ASVspoof 5 minDCF (0 = perfect, 1 = useless)."],
+         ("real clips in the given data", "0.3 %", "")),
+        ("Stage 1", "25 Sep", "pre", "Data audit → the prep() function",
+         ["A 3-level tree on trivial cues split real from fake perfectly: the 242 reals keep energy",
+          "up to 8 kHz. Decision: prep() on every clip (DC, silence trim, 7 kHz low-pass, loudness)."],
+         ("trivial-cue model (want ≈ 1)", "0.391 → 0.853", "the shortcut is gone")),
+        ("Stage 2", "25 Sep", "data", "External data and grouped splits",
+         ["One real voice teaches \"this voice = real\". Added 11 open corpora, including the exact",
+          "speakers DiffSSD clones; 3 generators are never trained on, to test unseen ones."],
+         ("share of real clips", "0.3 % → 31 %", "111k clips added")),
+        ("Stage 3", "25–26 Sep", "data", "Our own synthesis simulator",
+         ["5,204 fakes made from real clips (vocoder copy-synthesis) and open TTS models, so a fake",
+          "can share the real clip's voice and text. HiFi-GAN copies became the hardest fake type."],
+         ("simulated fakes", "5,204", "7 generators")),
+        ("Stage 4", "25 Sep", "pre", "Speech biology",
+         ["48 features of how speech is physically made: pitch jitter, shimmer, formant motion,",
+          "breathing, turbulence. Weak alone, but they add to spectral features."],
+         ("held-out minDCF", "0.438 / 0.201 / 0.169", "biology / spectral / both")),
+        ("Stage 5", "25 Sep", "pre", "Read the scorer, not just the brief",
+         ["The brief and the organizers' code disagree on which error costs 4× and on direction.",
+          "Decision: an exact local copy of the scorer, and both readings tracked everywhere."],
+         ("local scorer vs theirs", "exact match", "unit-tested")),
+        ("Stage 6", "25–26 Sep", "model", "First model ladder: R0, R1, R3",
+         ["R1 (LightGBM on 228 spectral + biology features) is decent. The organizers' AASIST,",
+          "pretrained elsewhere, fails on our data. Decision: fine-tune a big pretrained speech model."],
+         ("held-out minDCF", "R1 0.169 · R3 0.867", "")),
+        ("Stage 7", "26 Sep", "model", "R4ft: fine-tuned XLS-R, then R5 fusion",
+         ["XLS-R-300M cut to 12 of 24 blocks to fit an 8 GB GPU, fine-tuned end to end. 9× better",
+          "than R1. R5 adds R1 through a logistic-regression fusion: the initial submission."],
+         ("held-out minDCF", "0.0192 → 0.0138", "R4ft → R5")),
+        ("Stage 8", "26 Sep", "note", "Generalization tests (inference only)",
+         ["Public benchmarks and typing-noise call audio. Strong on most; voice conversion",
+          "(DeepVoice: celebrities from YouTube) is the weak spot. It becomes a guardrail."],
+         ("DeepVoice minDCF (R5)", "0.150", "")),
+        ("Stage 9", "26 Sep", "note", "Official result: the test is harder",
+         ["The organizers scored R5 at 0.0584, about 4× our held-out number: new speakers, channels",
+          "and generators. Decision: spend the remaining time on robustness and diversity."],
+         ("HGT official (R5)", "0.0584", "EER 2.5 %")),
+        ("Stage 10", "26 Sep", "fuse", "R6 and E5: a second opinion",
+         ["R4ft retrained with a new seed and 6,155 benchmark clips, so it makes different mistakes.",
+          "E5 = R4ft + R6 + R1, chosen by a rule written before R6 existed."],
+         ("E5 held-out · DeepVoice", "0.0154 · 0.152", "")),
+        ("Stage 11", "27 Sep", "model", "R7a: RawBoost channel noise",
+         ["60 % of training clips get simulated phone lines, cheap-mic distortion, clicks and noise,",
+          "so the model cannot lean on a clean recording. One model trained fully (14,336 steps)."],
+         ("R7a held-out minDCF", "0.0149", "best single model")),
+        ("Final", "27 Sep", "out", "E7: fusion of R4ft + R6 + R7a + R1",
+         ["Four models that fail differently, weighted by a logistic regression fit on validation.",
+          "R7a gets the largest weight. Passes both guardrails; submitted as the final."],
+         ("E7 held-out · DeepVoice", "0.0132 · 0.133", "best on both")),
+    ]
+    top, ch, gap = 84, 72, 14
+    c = Chart("How the model evolved: from the problem to E7",
+              "Each step: what we found, what we decided, and the number that showed it. Lower minDCF is better.",
+              top + len(steps) * (ch + gap) + 70)
+    c.parts.append(f'<line x1="112" y1="{top + ch / 2}" x2="112" y2="{top + (len(steps) - 1) * (ch + gap) + ch / 2}" '
+                   'stroke="#c5ccd3" stroke-width="3"/>')
+    for i, (stage, day, kind, title, lines, (pl, pv, ps)) in enumerate(steps):
+        y = top + i * (ch + gap)
+        c.parts.append(f'<text x="98" y="{y + 32}" text-anchor="end" class="bt" fill="#1b2430">{escape(stage)}</text>'
+                       f'<text x="98" y="{y + 49}" text-anchor="end" class="k">{escape(day)}</text>'
+                       f'<circle cx="112" cy="{y + ch / 2}" r="6" fill="{STYLE[kind][1]}"/>')
+        c.box(f"s{i}", 128, y, 570, ch, title, lines, kind)
+        c.parts.append(f'<rect x="710" y="{y}" width="170" height="{ch}" rx="8" fill="#ffffff" stroke="{STYLE[kind][1]}" '
+                       f'stroke-width="1.6"/><text x="720" y="{y + 20}" class="k">{escape(pl)}</text>'
+                       f'<text x="720" y="{y + 42}" style="font-size:15px;font-weight:700" fill="#1b2430">{escape(pv)}</text>'
+                       f'<text x="720" y="{y + 60}" class="k">{escape(ps)}</text>')
+    c.text(24, c.h - 44, "Held-out minDCF: 9,747 clips never used to choose anything, organizers' settings. "
+                         "DeepVoice: a public benchmark never trained on.", "al")
+    c.save("evolution")
+
+
 def main():
-    r0(); r1(); r3(); r4ft(); r6(); data_io()
+    r0(); r1(); r3(); r4ft(); r6(); data_io(); evolution()
     fusion("r5_fusion", "R5 · fusion of R4ft and R1 (first submission: HGT minDCF 0.0584)",
            "Each model gives a score; a logistic regression learns how much to trust each one.",
            [("a", "R4ft: XLS-R, win3", ["logit, higher = fake", "(r4ft_xlsr.svg)"], "margin: used as-is"),
