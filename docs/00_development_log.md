@@ -146,3 +146,8 @@ Two laptops shared the work. A CPU machine acted as coordinator and was the only
     stays the final.
   - Time box: a model not scored and uploaded by 05:45 is left out; the final file is built by 06:30.
   - Nothing is chosen from the organizers' feedback or the HGT audio.
+- **Owner amendment (03:12, before any R7 score existed on the CPU side):** R7b (WavLM-Large) is cancelled so the GPU
+  time goes to one fully trained model. R7a stopped at its 1.25 h budget while still improving (best `val_testlike`
+  combined 0.0283 at step 5,120), so it resumes from its checkpoint for up to 3 more hours under its unchanged early stop.
+  New time box: scored and uploaded by 07:05; the final file is built by 07:30. The step-5,120 scores stay as the
+  fallback if the resumed run misses the time box. The selection rule itself is unchanged; E7 is then R4ft + R6 + R7a + R1.
